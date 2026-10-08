@@ -1,0 +1,73 @@
+name: Build and publish IDownloader
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['README.md', 'docs/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: idownloader-main
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 26.6
+      - name: Prepare LibTorrent
+        run: |
+          brew install boost
+          ./Submodules/LibTorrent-Swift/make.sh
+      - name: Build unsigned device app
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          BUILD_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -o pipefail
+          xcodebuild -workspace iTorrent.xcworkspace -scheme iTorrent \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/IDownloader.xcarchive" -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
+            DEVELOPMENT_TEAM='' PROVISIONING_PROFILE_SPECIFIER='' \
+            MARKETING_VERSION="1.0.$BUILD_NUMBER" CURRENT_PROJECT_VERSION="$BUILD_NUMBER.$BUILD_ATTEMPT" \
+            archive | tee "$RUNNER_TEMP/build.log"
+      - name: Package IPA and source
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          BUILD_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/package/Payload" dist
+          cp -R "$RUNNER_TEMP/IDownloader.xcarchive/Products/Applications/iTorrent.app" "$RUNNER_TEMP/package/Payload/IDownloader.app"
+          cd "$RUNNER_TEMP/package"
+          zip -qry "$GITHUB_WORKSPACE/dist/IDownloader.ipa" Payload
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/generate-source.py dist/IDownloader.ipa \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/build-$BUILD_NUMBER-$BUILD_ATTEMPT/IDownloader.ipa" dist/source.json
+      - name: Publish build and refresh source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          BUILD_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          tag="build-$BUILD_NUMBER-$BUILD_ATTEMPT"
+          gh release create "$tag" dist/IDownloader.ipa --target "$GITHUB_SHA" \
+            --title "IDownloader 1.0.$BUILD_NUMBER (build $BUILD_NUMBER.$BUILD_ATTEMPT)" \
+            --notes "Testing build from commit $GITHUB_SHA. Install through the IDownloader source in LiveContainer or SideStore."
+          if ! gh release view nightly >/dev/null 2>&1; then
+            gh release create nightly --target "$GITHUB_SHA" --prerelease \
+              --title 'IDownloader source' --notes 'This source is updated after every successful main build.'
+          fi
+          gh release upload nightly dist/source.json --clobber
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: IDownloader-build
+          path: |
+            dist/
+            ${{ runner.temp }}/build.log
