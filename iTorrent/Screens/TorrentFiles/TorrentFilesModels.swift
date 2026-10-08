@@ -1,6 +1,6 @@
 //
 //  TorrentFilesModels.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 12.12.2025.
 //

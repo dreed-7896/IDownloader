@@ -93,7 +93,7 @@ struct ProgressWidgetLiveActivity: Widget {
             } minimal: {
                 TrailingView(context: context)
             }
-            .widgetURL(URL(string: "Pulled:hash:\(context.attributes.hash)"))
+            .widgetURL(URL(string: "iTorrent:hash:\(context.attributes.hash)"))
             .keylineTint(Color(uiColor: context.tintColor))
         }
 
@@ -164,7 +164,7 @@ struct ProgressWidgetLiveActivityWatchSupportContent: View {
                         .monospaced()
                 }
             }
-            .widgetURL(URL(string: "Pulled:hash:\(context.attributes.hash)"))
+            .widgetURL(URL(string: "iTorrent:hash:\(context.attributes.hash)"))
         }
     }
 }
@@ -222,7 +222,7 @@ struct ProgressWidgetLiveActivityContent: View {
             ProgressView(value: context.state.progress)
                 .progressViewStyle(.linear)
         }
-        .widgetURL(URL(string: "Pulled:hash:\(context.attributes.hash)"))
+        .widgetURL(URL(string: "iTorrent:hash:\(context.attributes.hash)"))
     }
 }
 

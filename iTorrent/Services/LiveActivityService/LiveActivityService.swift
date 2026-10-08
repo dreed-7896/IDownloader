@@ -1,6 +1,6 @@
 //
 //  LiveActivityService.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 06.04.2024.
 //
@@ -22,25 +22,8 @@ actor LiveActivityService {
                 .sink { [unowned self] updateModel in
                     Task { await updateLiveActivity(with: updateModel) }
                 }
-            FileDownloadService.shared.updates
-                .sink { [unowned self] download in
-                    Task { await updateFileLiveActivity(download) }
-                }
-            NotificationCenter.default.publisher(for: .init("fileDownloadsBecameActive"))
-                .sink { [unowned self] _ in
-                    Task { @MainActor in
-                        for download in FileDownloadService.shared.downloads {
-                            await self.updateFileLiveActivity(download)
-                        }
-                    }
-                }
 #endif
         }
-#if canImport(ActivityKit)
-        for download in FileDownloadService.shared.downloads {
-            Task { await updateFileLiveActivity(download) }
-        }
-#endif
     }
 
     private static let throttleDuration: Int = 5
@@ -69,29 +52,6 @@ extension LiveActivityService {
 
 #if canImport(ActivityKit)
 private extension LiveActivityService {
-    func updateFileLiveActivity(_ download: FileDownload) async {
-        guard #available(iOS 16.1, *), ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        let existing = Activity<ProgressWidgetAttributes>.activities.first { $0.attributes.hash == download.activityID }
-        guard download.isActive else {
-            if let existing { await end(existing) }
-            return
-        }
-        let color = PreferencesStorage.shared.tintColor
-        let data = try? NSKeyedArchiver.archivedData(withRootObject: color, requiringSecureCoding: true)
-        let state = ProgressWidgetAttributes.ContentState(name: download.name,
-            state: download.state == .preparing ? .downloadingMetadata : .downloading,
-            progress: download.progress, downSpeed: download.speed, upSpeed: 0,
-            timeRemainig: download.timeRemaining, timeStamp: .now, color: data)
-        if let existing {
-            await update(existing, with: state)
-        } else {
-            do {
-                _ = try Activity<ProgressWidgetAttributes>.request(attributes: .init(hash: download.activityID), contentState: state, pushType: .none)
-                throttleMap[download.activityID] = .now
-            } catch { print("File Live Activity: \(error.localizedDescription)") }
-        }
-    }
-
     func updateLiveActivity(with updateModel: TorrentService.TorrentUpdateModel) async {
         if #available(iOS 16.1, *) {
             guard ActivityAuthorizationInfo().areActivitiesEnabled

@@ -1,6 +1,6 @@
 //
 //  TorrentDetailsView.swift
-//  Pulled
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 10/12/2025.
 //
@@ -42,7 +42,7 @@ struct TorrentDetailsView: View {
                     Section {
                         VStack {
                             DetailView(title: "Hash", detail: "284d665fc0c912286d1505d6372140281384cb6d")
-                            DetailView(title: "Creator", detail: "Pulled 2.1.0")
+                            DetailView(title: "Creator", detail: "iTorrent 2.1.0")
                             DetailView(title: "Created", detail: "17/11/2025")
                             DetailView(title: "Added", detail: "17/11/2025")
                         }

@@ -1,6 +1,6 @@
 //
 //  RendererRouteMenuView.swift
-//  IDownloader
+//  iTorrent
 //
 
 import SwiftUI

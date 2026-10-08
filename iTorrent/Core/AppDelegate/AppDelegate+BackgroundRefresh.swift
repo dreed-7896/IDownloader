@@ -1,6 +1,6 @@
 //
 //  AppDelegate+BackgroundRefresh.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 11.04.2024.
 //
@@ -11,7 +11,7 @@ import UIKit
 extension AppDelegate {
     func registerBackgroundRefresh() {
         BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: "com.dreed7896.IDownloader.refresh",
+            forTaskWithIdentifier: "com.xitrix.itorrent.refresh",
             using: nil
         ) { task in
             self.handleAppRefresh(task)
@@ -23,7 +23,7 @@ extension AppDelegate {
 
 private extension AppDelegate {
     func scheduleBackgroundRssFetch() {
-        let rssFetchTask = BGAppRefreshTaskRequest(identifier: "com.dreed7896.IDownloader.refresh")
+        let rssFetchTask = BGAppRefreshTaskRequest(identifier: "com.xitrix.itorrent.refresh")
         rssFetchTask.earliestBeginDate = nil
         do {
             try BGTaskScheduler.shared.submit(rssFetchTask)

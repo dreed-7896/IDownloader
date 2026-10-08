@@ -1,6 +1,6 @@
 //
 //  AppDelegate+Firebase.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 20.04.2024.
 //

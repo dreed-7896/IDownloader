@@ -1,6 +1,6 @@
 //
 //  UIColor+Hex.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 03/04/2024.
 //

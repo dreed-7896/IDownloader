@@ -1,6 +1,6 @@
 //
 //  TorrentDetailsViewModel.swift
-//  Pulled
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 30/10/2023.
 //
@@ -160,11 +160,11 @@ extension TorrentDetailsViewModel {
     }
 
     func resume() {
-        torrentHandle.resumeDownload()
+        torrentHandle.resume()
     }
 
     func pause() {
-        torrentHandle.pauseDownload()
+        torrentHandle.pause()
     }
 
     func rehash(from source: MvvmPresentationSource) {

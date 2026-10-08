@@ -1,6 +1,6 @@
 //
 //  EditTextViewController.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Magesh K on 17.10.2023.
 //  Copyright © 2023  Magesh K. All rights reserved.

@@ -1,6 +1,6 @@
 //
 //  AdView+Meta.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 04.05.2024.
 //

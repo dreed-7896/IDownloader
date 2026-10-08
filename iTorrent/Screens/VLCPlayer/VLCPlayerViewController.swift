@@ -1,6 +1,6 @@
 //
 //  VLCPlayerViewController.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 21.03.2026.
 //

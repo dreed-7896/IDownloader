@@ -1,6 +1,6 @@
 //
 //  StorageModel+Extensions.swift
-//  Pulled
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 05/07/2024.
 //
@@ -8,7 +8,7 @@
 import LibTorrent
 
 extension StorageModel {
-    static var defaultName: String { "Pulled Default" }
+    static var defaultName: String { "iTorrent Default" }
 }
 
 extension Optional where Wrapped: StorageModel {

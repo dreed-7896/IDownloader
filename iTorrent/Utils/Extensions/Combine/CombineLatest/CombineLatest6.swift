@@ -1,6 +1,6 @@
 //
 //  CombineLatest6.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 04/04/2024.
 //

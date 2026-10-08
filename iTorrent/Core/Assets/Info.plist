@@ -2,13 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleName</key>
-	<string>Pulled</string>
-	<key>CFBundleDisplayName</key>
-	<string>Pulled</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.dreed7896.IDownloader.refresh</string>
+		<string>com.xitrix.itorrent.refresh</string>
 	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
@@ -33,21 +29,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.dreed7896.IDownloader.magnet</string>
+			<string>com.xitrix.magnet</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>magnet</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLName</key>
-			<string>com.dreed7896.IDownloader.links</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>Pulled</string>
-				<string>IDownloader</string>
 			</array>
 		</dict>
 	</array>
@@ -331,10 +316,5 @@
 			</dict>
 		</dict>
 	</array>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
 </dict>
 </plist>

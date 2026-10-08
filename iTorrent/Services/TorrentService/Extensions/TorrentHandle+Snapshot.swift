@@ -1,6 +1,6 @@
 //
 //  TorrentHandle+Snapshot.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 10.06.2026.
 //

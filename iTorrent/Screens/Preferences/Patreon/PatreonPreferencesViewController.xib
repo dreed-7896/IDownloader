@@ -70,7 +70,7 @@
                                                                     <nil key="textColor"/>
                                                                     <nil key="highlightedColor"/>
                                                                 </label>
-                                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Creator of Pulled" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YjY-6f-cqP">
+                                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Creator of iTorrent" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YjY-6f-cqP">
                                                                     <rect key="frame" x="0.0" y="27.333333333333336" width="285" height="23.333333333333336"/>
                                                                     <fontDescription key="fontDescription" style="UICTFontTextStyleCallout"/>
                                                                     <color key="textColor" systemColor="secondaryLabelColor"/>
@@ -96,7 +96,7 @@
                                                             <rect key="frame" x="16" y="16" width="329" height="206.33333333333334"/>
                                                             <string key="text">Hey for all,
 
-You can support future development of Pulled by donating me on Patreon. In return, you'll receive access to the ads-free version of Pulled app.
+You can support future development of iTorrent by donating me on Patreon. In return, you'll receive access to the ads-free version of iTorrent app.
 
 Thanks for all your support!</string>
                                                             <fontDescription key="fontDescription" style="UICTFontTextStyleBody"/>

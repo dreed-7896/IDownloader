@@ -1,6 +1,6 @@
 //
 //  AppDelegate+RemoteConfig.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 19.04.2024.
 //
@@ -57,7 +57,7 @@ private extension AppDelegate {
                    let remoteURL = URL(string: remoteURI) {
                     updateURL = remoteURL
                 } else {
-                    updateURL = URL(string: "https://github.com/dreed-7896/IDownloader")!
+                    updateURL = URL(string: "https://github.com/XITRIX/iTorrent")!
                 }
 
                 await UIApplication.shared.open(updateURL)

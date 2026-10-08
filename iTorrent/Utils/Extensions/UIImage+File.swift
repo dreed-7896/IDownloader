@@ -1,6 +1,6 @@
 //
 //  UIImage+File.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 04/11/2023.
 //

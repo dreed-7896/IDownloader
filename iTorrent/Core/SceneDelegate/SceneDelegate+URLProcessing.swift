@@ -1,6 +1,6 @@
 //
 //  SceneDelegate+URLProcessing.swift
-//  Pulled
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 06.04.2024.
 //
@@ -11,43 +11,18 @@ import UIKit
 extension SceneDelegate {
     func processURL(_ url: URL) {
         Task {
-            if ["pulled", "idownloader"].contains(url.scheme?.lowercased() ?? ""), url.host == "shared" {
-                consumeSharedLinks()
-                return
-            }
-            let filePrefix = url.absoluteString.hasPrefix("IDownloader:hash:file-") ? "IDownloader:hash:file-" : "Pulled:hash:file-"
-            if url.absoluteString.hasPrefix(filePrefix),
-               let id = UUID(uuidString: String(url.absoluteString.dropFirst(filePrefix.count))) {
-                showFileDownloads(selected: id)
-                return
-            }
             if tryOpenTorrentDetails(with: url) { return }
             if tryOpenAddTorrent(with: url) { return }
             if tryOpenAddMagnet(with: url) { return }
-            if url.pathExtension.lowercased() == "torrent", await tryOpenRemoteAddTorrent(with: url) { return }
-            if let id = FileDownloadService.shared.add(url) { showFileDownloads(selected: id) }
+            if await tryOpenRemoteAddTorrent(with: url) { return }
         }
-    }
-
-    func consumeSharedLinks() {
-        SharedDownloadInbox.consume { processURL($0) }
-    }
-
-    func showFileDownloads(selected: UUID? = nil) {
-        guard let root = window?.rootViewController?.topPresented else { return }
-        let navigation = root as? UINavigationController ?? root.navigationController
-            ?? (root as? UISplitViewController)?.viewControllers.first as? UINavigationController
-        guard let selected else { navigation?.popToRootViewController(animated: true); return }
-        let controller = FileDownloadDetailsViewModel.resolveVC(with: selected)
-        if let navigation { navigation.pushViewController(controller, animated: true) }
-        else { root.present(UINavigationController(rootViewController: controller), animated: true) }
     }
 }
 
 private extension SceneDelegate {
     // Open torrent details by hash from Life Activity
     func tryOpenTorrentDetails(with url: URL) -> Bool {
-        let prefix = ["Pulled:hash:", "IDownloader:hash:", "iTorrent:hash:"].first { url.absoluteString.hasPrefix($0) } ?? "Pulled:hash:"
+        let prefix = "iTorrent:hash:"
 
         guard url.absoluteString.hasPrefix(prefix) else { return false }
         let hash = url.absoluteString.replacingOccurrences(of: prefix, with: "")
@@ -61,7 +36,7 @@ private extension SceneDelegate {
 
     // Add new torrent flow by file URL
     func tryOpenAddTorrent(with url: URL) -> Bool {
-        guard url.isFileURL, url.pathExtension.lowercased() == "torrent",
+        guard url.absoluteString.hasPrefix("file:///"),
               let rootViewController = window?.rootViewController?.topPresented
         else {
             return false
@@ -73,7 +48,7 @@ private extension SceneDelegate {
 
     // Add new torrent by Magnet URL
     func tryOpenAddMagnet(with url: URL) -> Bool {
-        guard url.scheme?.lowercased() == "magnet",
+        guard url.absoluteString.hasPrefix("magnet:"),
               let magnet = MagnetURI(with: url)
         else { return false }
 

@@ -1,6 +1,6 @@
 //
 //  RssListPreferencesViewController.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 10.04.2024.
 //

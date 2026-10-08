@@ -1,6 +1,6 @@
 //
 //  BCHostingConfiguration.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 04.06.2024.
 //

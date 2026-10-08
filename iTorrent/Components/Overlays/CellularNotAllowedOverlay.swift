@@ -1,6 +1,6 @@
 //
 //  CellularNotAllowedOverlay.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 23.12.2024.
 //

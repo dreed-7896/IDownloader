@@ -1,6 +1,6 @@
 //
 //  RssSearchViewController.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 22/04/2024.
 //

@@ -1,6 +1,6 @@
 //
 //  CircularAnimation.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 08.09.2019.
 //  Copyright © 2019  XITRIX. All rights reserved.

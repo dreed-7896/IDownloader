@@ -1,6 +1,6 @@
 //
 //  Publisher+UI.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 28.05.2024.
 //

@@ -1,6 +1,6 @@
 //
 //  SpeedFormat.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 30/10/2023.
 //

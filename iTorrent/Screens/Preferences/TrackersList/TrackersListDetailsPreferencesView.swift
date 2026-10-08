@@ -1,6 +1,6 @@
 //
 //  TrackersListDetailsPreferencesView.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 16/09/2024.
 //

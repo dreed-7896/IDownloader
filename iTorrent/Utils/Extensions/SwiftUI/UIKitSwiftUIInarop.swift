@@ -1,6 +1,6 @@
 //
 //  UIKitSwiftUIInarop.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 01/11/2023.
 //

@@ -1,6 +1,6 @@
 //
 //  PatreonWebServer.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 10/05/2024.
 //

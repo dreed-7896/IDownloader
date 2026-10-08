@@ -1,6 +1,6 @@
 //
 //  PreferencesStorage.swift
-//  Pulled
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 07/11/2023.
 //
@@ -35,8 +35,6 @@ class PreferencesStorage: Resolvable {
 
     private var disposeBag: [AnyCancellable] = []
     static let shared = PreferencesStorage()
-
-    @UserDefaultItem("fileDownloadParts", 4) var fileDownloadParts: Int
 
     static let defaultTorrentListGroupsSortingArray: [TorrentHandle.State] = [
         .checkingFiles,
@@ -167,12 +165,12 @@ extension Session.Settings {
         let preferences = PreferencesStorage.shared
 
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
-        settings.agentName = "Pulled/\(appVersion)"
+        settings.agentName = "iTorrent/\(appVersion)"
         settings.peerFingerprint = peerFingerprint(for: appVersion)
 
-        settings.maxActiveTorrents = -1
-        settings.maxDownloadingTorrents = -1
-        settings.maxUploadingTorrents = -1
+        settings.maxActiveTorrents = preferences.maxActiveTorrents
+        settings.maxDownloadingTorrents = preferences.maxDownloadingTorrents
+        settings.maxUploadingTorrents = preferences.maxUploadingTorrents
 
         settings.maxUploadSpeed = preferences.maxUploadSpeed
         settings.maxDownloadSpeed = preferences.maxDownloadSpeed

@@ -1,6 +1,6 @@
 //
 //  TorrentDetailProgressCellViewModel.swift
-//  Pulled
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 31/10/2023.
 //
@@ -9,7 +9,6 @@ import Foundation
 
 class TorrentDetailProgressCellViewModel: BaseViewModel, ObservableObject {
     @Published var title: String = ""
-    var showsConnections = false
     @Published var progress: Double = 0
     @Published var segmentedProgress: [Double] = [0]
 

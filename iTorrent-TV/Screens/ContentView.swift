@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  IDownloader-TV
+//  iTorrent-TV
 //
 //  Created by Daniil Vinogradov on 09/12/2025.
 //

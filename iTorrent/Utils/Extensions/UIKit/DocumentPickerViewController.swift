@@ -1,6 +1,6 @@
 //
 //  DocumentPickerViewController.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 25.11.2025.
 //

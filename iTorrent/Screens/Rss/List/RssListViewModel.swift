@@ -1,6 +1,6 @@
 //
 //  RssListViewModel.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 08.04.2024.
 //

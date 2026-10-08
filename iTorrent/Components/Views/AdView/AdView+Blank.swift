@@ -1,6 +1,6 @@
 //
 //  AdView+Blank.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Daniil Vinogradov on 03/05/2024.
 //

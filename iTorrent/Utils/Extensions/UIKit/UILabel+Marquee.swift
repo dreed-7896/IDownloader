@@ -1,6 +1,6 @@
 //
 //  UILabel+Marquee.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 23.06.2025.
 //

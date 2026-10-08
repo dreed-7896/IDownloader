@@ -1,6 +1,6 @@
 //
 //  BaseControl.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 06.05.2024.
 //

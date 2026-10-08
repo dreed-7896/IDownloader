@@ -1,6 +1,6 @@
 //
 //  UnityAdsManager.swift
-//  IDownloader
+//  iTorrent
 //
 //  Created by Даниил Виноградов on 28.04.2024.
 //
