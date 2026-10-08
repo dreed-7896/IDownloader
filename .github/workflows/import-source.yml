@@ -1,5 +1,6 @@
 name: Import original iTorrent source
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths: ['.github/workflows/import-source.yml']
