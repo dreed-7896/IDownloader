@@ -1,6 +1,6 @@
 # IDownloader
 
-An iOS download manager maintained by Raahat. The app currently supports torrent downloads, RSS feeds, file management, and video playback. Direct HTTP/HTTPS file downloads are planned.
+An iOS download manager maintained by Raahat. Download files over HTTP/HTTPS and torrents, subscribe to RSS feeds, manage files, and play videos.
 
 ## Install and test
 
@@ -17,6 +17,10 @@ You can also download the IPA from [GitHub Releases](https://github.com/dreed-78
 ## Features
 
 - Torrent and magnet link downloads
+- Direct HTTP/HTTPS file downloads with up to 16 parallel parts (4 by default)
+- Automatic single-connection fallback when a server does not support byte ranges
+- Share HTTP/HTTPS or magnet links to IDownloader from other apps
+- File download history, pause/resume, retry, preview, and deletion
 - Pause, resume, download priorities, and speed limits
 - RSS feed subscriptions
 - Files app integration and WebDAV sharing
@@ -24,6 +28,16 @@ You can also download the IPA from [GitHub Releases](https://github.com/dreed-78
 - Background download modes
 - Live Activities and Dynamic Island progress
 - iPhone and iPad layouts, themes, and alternate icons
+
+## File downloads and sharing
+
+Tap **Files** in the bottom toolbar to view file downloads, or choose **Download from URL** from the add menu. Magnet links start torrents; `.torrent` URLs keep the torrent import flow; other HTTP/HTTPS links download files. Use a direct file link: sharing a webpage downloads that page, rather than extracting its videos or attachments.
+
+Set **Settings → File downloads → Download parts** to a number from 1 to 16. The downloader probes actual byte-range support, validates each part, and uses one connection if the server ignores ranges. The setting applies to new downloads. Files are saved in **On My iPhone → IDownloader → Downloads**, in separate folders to prevent name collisions. Download progress uses the existing Live Activity/Dynamic Island layout, including speed, percentage, and time remaining.
+
+The share extension queues links in an App Group and attempts to open IDownloader. If iOS declines the handoff, open IDownloader to start the queued downloads; the extension shows this instruction. Share extensions must be included when signing/installing the app. A LiveContainer guest cannot register its own share extension with iOS, so install IDownloader directly through SideStore/AltStore to use its own entry in the system share sheet. With recent LiveContainer versions, you can instead select **LiveContainer → IDownloader** from the share sheet to forward a URL to the guest app; see [LiveContainer's sharing guide](https://github.com/LiveContainer/LiveContainer#open-in-app-support).
+
+File transfers use background URLSession tasks. Pausing suspends active connections; retrying a failed transfer restarts it. iOS controls scheduling while the app is suspended, and user force-quit stops background work until the app is reopened.
 
 ## Development
 

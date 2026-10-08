@@ -98,6 +98,7 @@ class SceneDelegate: MvvmSceneDelegate {
     override func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         super.scene(scene, willConnectTo: session, options: connectionOptions)
         invokeInitialSetup()
+        consumeSharedLinks()
         connectionOptions.urlContexts.forEach { context in
             let url = context.url
             processURL(url)
@@ -119,6 +120,11 @@ class SceneDelegate: MvvmSceneDelegate {
     func sceneWillEnterForeground(_ scene: UIScene) {
         UIApplication.shared.applicationIconBadgeNumber = 0
         stopBackground()
+    }
+
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        consumeSharedLinks()
+        NotificationCenter.default.post(name: .init("fileDownloadsBecameActive"), object: nil)
     }
 
     override func binding() {

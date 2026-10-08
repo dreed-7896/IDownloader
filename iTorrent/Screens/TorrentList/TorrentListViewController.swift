@@ -37,6 +37,9 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
 
     private let addButton = UIBarButtonItem(title: %"common.add", image: .init(systemName: "plus"))
     private let preferencesButton = UIBarButtonItem(title: %"preferences", image: .init(systemName: "gearshape.fill"))
+    private lazy var filesButton = UIBarButtonItem(title: "Files", image: .init(systemName: "folder.fill"), primaryAction: UIAction { [weak self] _ in
+        self?.navigationController?.pushViewController(FileDownloadsViewController(), animated: true)
+    })
     private let sortButton = UIBarButtonItem(title: %"list.sort", image: .icSort)
     private let rssButton = UIBarButtonItem()
 
@@ -67,7 +70,7 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
                 .flexibleSpace(),
                 deleteButton
             ].compactMap { $0 } :
-            [addButton, .init(systemItem: .flexibleSpace), preferencesButton]
+            [addButton, .init(systemItem: .flexibleSpace), filesButton, .init(systemItem: .flexibleSpace), preferencesButton]
     }
 
     override func viewDidLoad() {
@@ -93,7 +96,7 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
             UIAction(title: %"list.add.magnet", image: .init(resource: .icMagnet)) { [unowned self] _ in
                 present(makeMagnetAlert(), animated: true)
             },
-            UIAction(title: %"list.add.url", image: .init(systemName: "link.badge.plus")) { [unowned self] _ in
+            UIAction(title: "Download from URL", image: .init(systemName: "link.badge.plus")) { [unowned self] _ in
                 present(makeUrlAlert(), animated: true)
             }
         ])
@@ -410,18 +413,21 @@ private extension TorrentListViewController {
     }
 
     func makeUrlAlert() -> UIAlertController {
-        let alert = UIAlertController(title: %"list.add.url.title", message: %"list.add.url.message", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Download from URL", message: "Enter a file URL, torrent URL, or magnet link.", preferredStyle: .alert)
 
         alert.addTextField { textField in
-            textField.placeholder = %"list.add.url.placeholder"
+            textField.placeholder = "https://example.com/file.zip"
+            textField.keyboardType = .URL
+            textField.autocapitalizationType = .none
+            textField.autocorrectionType = .no
         }
 
         alert.addAction(.init(title: %"common.cancel", style: .cancel))
         alert.addAction(.init(title: %"common.ok", style: .default) { [unowned self] _ in
             Task {
                 guard let text = alert.textFields?.first?.text,
-                      let url = URL(string: text),
-                      ["http", "https"].contains(url.scheme?.lowercased())
+                      let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
+                      SharedDownloadInbox.supported(url)
                 else {
                     let alert = UIAlertController(title: %"common.error", message: %"list.add.url.error", preferredStyle: .alert)
                     alert.addAction(.init(title: %"common.close", style: .cancel))
@@ -429,11 +435,16 @@ private extension TorrentListViewController {
                     return
                 }
 
-                do {
-                    let torrentFile = try await TorrentFile.download(from: url)
-                    TorrentAddViewModel.present(with: torrentFile, from: self)
-                } catch {
-                    presentRemoteTorrentDownloadError(error, url: url)
+                if url.scheme?.lowercased() == "magnet" {
+                    if let magnet = MagnetURI(with: url) { TorrentService.shared.addTorrent(by: magnet) }
+                } else if url.pathExtension.lowercased() == "torrent" {
+                    do {
+                        let torrentFile = try await TorrentFile.download(from: url)
+                        TorrentAddViewModel.present(with: torrentFile, from: self)
+                    } catch { presentRemoteTorrentDownloadError(error, url: url) }
+                } else {
+                    FileDownloadService.shared.add(url)
+                    navigationController?.pushViewController(FileDownloadsViewController(), animated: true)
                 }
             }
         }, isPrimary: true)

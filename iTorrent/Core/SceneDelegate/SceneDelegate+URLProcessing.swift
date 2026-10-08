@@ -11,10 +11,41 @@ import UIKit
 extension SceneDelegate {
     func processURL(_ url: URL) {
         Task {
+            if url.scheme?.lowercased() == "idownloader", url.host == "shared" {
+                consumeSharedLinks()
+                return
+            }
+            if url.absoluteString.hasPrefix("IDownloader:hash:file-"),
+               let id = UUID(uuidString: String(url.absoluteString.dropFirst("IDownloader:hash:file-".count))) {
+                showFileDownloads(selected: id)
+                return
+            }
             if tryOpenTorrentDetails(with: url) { return }
             if tryOpenAddTorrent(with: url) { return }
             if tryOpenAddMagnet(with: url) { return }
-            if await tryOpenRemoteAddTorrent(with: url) { return }
+            if url.pathExtension.lowercased() == "torrent", await tryOpenRemoteAddTorrent(with: url) { return }
+            if FileDownloadService.shared.add(url) != nil { showFileDownloads() }
+        }
+    }
+
+    func consumeSharedLinks() {
+        SharedDownloadInbox.consume { processURL($0) }
+    }
+
+    func showFileDownloads(selected: UUID? = nil) {
+        guard let root = window?.rootViewController?.topPresented else { return }
+        let navigation = root as? UINavigationController ?? root.navigationController
+            ?? (root as? UISplitViewController)?.viewControllers.first as? UINavigationController
+        if let existing = navigation?.viewControllers.last as? FileDownloadsViewController {
+            existing.selectedDownload = selected
+            return
+        }
+        let controller = FileDownloadsViewController()
+        controller.selectedDownload = selected
+        if let navigation { navigation.pushViewController(controller, animated: true) }
+        else {
+            controller.showsCloseButton = true
+            root.present(UINavigationController(rootViewController: controller), animated: true)
         }
     }
 }
@@ -36,7 +67,7 @@ private extension SceneDelegate {
 
     // Add new torrent flow by file URL
     func tryOpenAddTorrent(with url: URL) -> Bool {
-        guard url.absoluteString.hasPrefix("file:///"),
+        guard url.isFileURL, url.pathExtension.lowercased() == "torrent",
               let rootViewController = window?.rootViewController?.topPresented
         else {
             return false
@@ -48,7 +79,7 @@ private extension SceneDelegate {
 
     // Add new torrent by Magnet URL
     func tryOpenAddMagnet(with url: URL) -> Bool {
-        guard url.absoluteString.hasPrefix("magnet:"),
+        guard url.scheme?.lowercased() == "magnet",
               let magnet = MagnetURI(with: url)
         else { return false }
 

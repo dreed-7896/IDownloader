@@ -69,6 +69,16 @@ private extension PreferencesViewModel {
 //            })
         })
 
+        sections.append(.init(id: "fileDownloads", header: "File downloads", footer: "Connections per file. Servers without byte-range support automatically use a single connection. Changes apply to new downloads.") {
+            PRButtonViewModel(with: .init(title: "Download parts", value: preferences.$fileDownloadParts.map { "\($0)" }.eraseToAnyPublisher()) { [unowned self] in
+                textInput(title: "Download parts", message: "Choose between 1 and 16 parts.", placeholder: "4", defaultValue: "\(preferences.fileDownloadParts)", type: .numberPad) { [unowned self] result in
+                    dismissSelection.send()
+                    guard let result, let parts = Int(result), (1...16).contains(parts) else { return }
+                    preferences.fileDownloadParts = parts
+                }
+            })
+        })
+
 #if IS_SUPPORT_LOCATION_BG
         sections.append(.init(id: "background", header: %"preferences.background") {
             PRSwitchViewModel(with: .init(title: %"preferences.background.enable", value: preferences.$isBackgroundDownloadEnabled.binding))

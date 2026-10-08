@@ -36,6 +36,8 @@ class PreferencesStorage: Resolvable {
     private var disposeBag: [AnyCancellable] = []
     static let shared = PreferencesStorage()
 
+    @UserDefaultItem("fileDownloadParts", 4) var fileDownloadParts: Int
+
     static let defaultTorrentListGroupsSortingArray: [TorrentHandle.State] = [
         .checkingFiles,
         .downloadingMetadata,

@@ -23,6 +23,8 @@ extension SceneDelegate {
         TorrentService.shared.updateNotifier
             .filter { _ in BackgroundService.shared.isRunning }
             .filter { $0.oldSnapshot.friendlyState != $0.handle?.snapshot.friendlyState }
+            .map { _ in () }
+            .merge(with: FileDownloadService.shared.updates.map { _ in () })
             .sink { _ in
                 guard !BackgroundService.isBackgroundNeeded else { return }
                 BackgroundService.shared.stop()

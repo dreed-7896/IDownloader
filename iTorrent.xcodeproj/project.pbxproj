@@ -272,6 +272,12 @@
 		D1F8BC852AFC405A00A6258C /* MvvmViewModel+Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F8BC842AFC405A00A6258C /* MvvmViewModel+Alert.swift */; };
 		D1FFC9652C38136600233C2F /* URL+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1FFC9642C38135F00233C2F /* URL+Extensions.swift */; };
 		D1FFC96C2C382FC900233C2F /* StorageModel+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1FFC96B2C382FBE00233C2F /* StorageModel+Extensions.swift */; };
+		D0F11E00202610080000000B /* FileDownloadService.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000001 /* FileDownloadService.swift */; };
+		D0F11E00202610080000000C /* FileDownloadsViewController.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000002 /* FileDownloadsViewController.swift */; };
+		D0F11E00202610080000000D /* SharedDownloadInbox.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000003 /* SharedDownloadInbox.swift */; };
+		D0F11E00202610080000000E /* ShareViewController.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000004 /* ShareViewController.swift */; };
+		D0F11E00202610080000000F /* SharedDownloadInbox.swift in Share Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000003; };
+		D0F11E002026100800000010 /* ShareExtension.appex in Embed Foundation Extensions */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000007; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -282,6 +288,7 @@
 			remoteGlobalIDString = 7C5FBE3A2BC0ADC90069E5A0;
 			remoteInfo = ProgressWidgetExtension;
 		};
+		D0F11E002026100800000019 /* Share proxy */ = { isa = PBXContainerItemProxy; containerPortal = D1A226922AEEEFCC00669D6D; proxyType = 1; remoteGlobalIDString = D0F11E002026100800000017; remoteInfo = ShareExtension; };
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -292,6 +299,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				7C5FBE4C2BC0ADCC0069E5A0 /* ProgressWidgetExtension.appex in Embed Foundation Extensions */,
+				D0F11E002026100800000010 /* ShareExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -558,6 +566,13 @@
 		D1F8BC842AFC405A00A6258C /* MvvmViewModel+Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MvvmViewModel+Alert.swift"; sourceTree = "<group>"; };
 		D1FFC9642C38135F00233C2F /* URL+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URL+Extensions.swift"; sourceTree = "<group>"; };
 		D1FFC96B2C382FBE00233C2F /* StorageModel+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StorageModel+Extensions.swift"; sourceTree = "<group>"; };
+		D0F11E002026100800000001 /* FileDownloadService.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iTorrent/Services/FileDownloadService/FileDownloadService.swift"; sourceTree = SOURCE_ROOT; };
+		D0F11E002026100800000002 /* FileDownloadsViewController.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iTorrent/Screens/FileDownloads/FileDownloadsViewController.swift"; sourceTree = SOURCE_ROOT; };
+		D0F11E002026100800000003 /* SharedDownloadInbox.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/SharedDownloadInbox.swift"; sourceTree = SOURCE_ROOT; };
+		D0F11E002026100800000004 /* ShareViewController.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShareExtension/ShareViewController.swift"; sourceTree = SOURCE_ROOT; };
+		D0F11E002026100800000005 /* Info.plist */ = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "ShareExtension/Info.plist"; sourceTree = SOURCE_ROOT; };
+		D0F11E002026100800000006 /* ShareExtension.entitlements */ = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "ShareExtension/ShareExtension.entitlements"; sourceTree = SOURCE_ROOT; };
+		D0F11E002026100800000007 /* ShareExtension.appex */ = { isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -601,6 +616,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D0F11E002026100800000015 /* Share Frameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -1327,6 +1343,12 @@
 		D1A226912AEEEFCC00669D6D = {
 			isa = PBXGroup;
 			children = (
+				D0F11E002026100800000001 /* FileDownloadService.swift */,
+				D0F11E002026100800000002 /* FileDownloadsViewController.swift */,
+				D0F11E002026100800000003 /* SharedDownloadInbox.swift */,
+				D0F11E002026100800000004 /* ShareViewController.swift */,
+				D0F11E002026100800000005 /* Info.plist */,
+				D0F11E002026100800000006 /* ShareExtension.entitlements */,
 				D10257C52EE8619300201640 /* iTorrent-TV */,
 				D1A2269C2AEEEFCC00669D6D /* iTorrent */,
 				7C5FBE402BC0ADC90069E5A0 /* ProgressWidget */,
@@ -1341,6 +1363,7 @@
 				D1A2269A2AEEEFCC00669D6D /* iTorrent.app */,
 				7C5FBE3B2BC0ADC90069E5A0 /* ProgressWidgetExtension.appex */,
 				D10257AE2EE8614900201640 /* iTorrent-TV.app */,
+				D0F11E002026100800000007 /* ShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1699,6 +1722,7 @@
 			);
 			dependencies = (
 				7C5FBE4B2BC0ADCC0069E5A0 /* PBXTargetDependency */,
+				D0F11E00202610080000001A /* Share dependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				7C92760D2F7C321A0081CA19 /* AirPlay */,
@@ -1717,6 +1741,7 @@
 			productReference = D1A2269A2AEEEFCC00669D6D /* iTorrent.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D0F11E002026100800000017 /* ShareExtension */ = { isa = PBXNativeTarget; buildConfigurationList = D0F11E002026100800000018; buildPhases = (D0F11E002026100800000014, D0F11E002026100800000015, D0F11E002026100800000016, ); buildRules = (); dependencies = (); name = ShareExtension; productName = ShareExtension; productReference = D0F11E002026100800000007; productType = "com.apple.product-type.app-extension"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -1765,6 +1790,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				D0F11E002026100800000017 /* ShareExtension */,
 				D1A226992AEEEFCC00669D6D /* iTorrent */,
 				7C5FBE3A2BC0ADC90069E5A0 /* ProgressWidgetExtension */,
 				D10257AD2EE8614900201640 /* iTorrent-TV */,
@@ -1824,6 +1850,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D0F11E002026100800000016 /* Share Resources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -1880,6 +1907,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0F11E00202610080000000B /* FileDownloadService.swift in Sources */,
+				D0F11E00202610080000000C /* FileDownloadsViewController.swift in Sources */,
+				D0F11E00202610080000000D /* SharedDownloadInbox.swift in Sources */,
 				7C9A11012F0A000100C0DE02 /* TorrentMigration.swift in Sources */,
 				7CF6DA352C0F3DB90033D03F /* BCHostingConfiguration.swift in Sources */,
 				D1FFC96C2C382FC900233C2F /* StorageModel+Extensions.swift in Sources */,
@@ -2068,6 +2098,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D0F11E002026100800000014 /* Share Sources */ = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D0F11E00202610080000000E, D0F11E00202610080000000F, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -2077,6 +2108,7 @@
 			target = 7C5FBE3A2BC0ADC90069E5A0 /* ProgressWidgetExtension */;
 			targetProxy = 7C5FBE4A2BC0ADCC0069E5A0 /* PBXContainerItemProxy */;
 		};
+		D0F11E00202610080000001A /* Share dependency */ = { isa = PBXTargetDependency; target = D0F11E002026100800000017; targetProxy = D0F11E002026100800000019; platformFilter = ios; };
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
@@ -2657,6 +2689,51 @@
 			};
 			name = Debug;
 		};
+		D0F11E00202610080000001E /* Debug */ = { isa = XCBuildConfiguration; buildSettings = { APPLICATION_EXTENSION_API_ONLY = YES;
+                CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_FILE = ShareExtension/Info.plist;
+                IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+                PRODUCT_BUNDLE_IDENTIFIER = "$(APPLICATION_ID).ShareExtension";
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SKIP_INSTALL = YES;
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SUPPORTS_MACCATALYST = NO;
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = "1,2";
+ }; name = Debug; };
+		D0F11E00202610080000001F /* RelWithDebInfo */ = { isa = XCBuildConfiguration; buildSettings = { APPLICATION_EXTENSION_API_ONLY = YES;
+                CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_FILE = ShareExtension/Info.plist;
+                IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+                PRODUCT_BUNDLE_IDENTIFIER = "$(APPLICATION_ID).ShareExtension";
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SKIP_INSTALL = YES;
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SUPPORTS_MACCATALYST = NO;
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = "1,2";
+ }; name = RelWithDebInfo; };
+		D0F11E002026100800000020 /* Release */ = { isa = XCBuildConfiguration; buildSettings = { APPLICATION_EXTENSION_API_ONLY = YES;
+                CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_FILE = ShareExtension/Info.plist;
+                IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+                PRODUCT_BUNDLE_IDENTIFIER = "$(APPLICATION_ID).ShareExtension";
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SKIP_INSTALL = YES;
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SUPPORTS_MACCATALYST = NO;
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = "1,2";
+ }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -2700,6 +2777,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		D0F11E002026100800000018 /* Share configuration list */ = { isa = XCConfigurationList; buildConfigurations = (D0F11E00202610080000001E, D0F11E00202610080000001F, D0F11E002026100800000020, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
