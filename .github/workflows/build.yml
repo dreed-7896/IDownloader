@@ -43,7 +43,7 @@ jobs:
           BUILD_ATTEMPT: ${{ github.run_attempt }}
         run: |
           mkdir -p "$RUNNER_TEMP/package/Payload" dist
-          cp -R "$RUNNER_TEMP/IDownloader.xcarchive/Products/Applications/iTorrent.app" "$RUNNER_TEMP/package/Payload/IDownloader.app"
+          cp -R "$RUNNER_TEMP/IDownloader.xcarchive/Products/Applications/IDownloader.app" "$RUNNER_TEMP/package/Payload/IDownloader.app"
           cd "$RUNNER_TEMP/package"
           zip -qry "$GITHUB_WORKSPACE/dist/IDownloader.ipa" Payload
           cd "$GITHUB_WORKSPACE"
