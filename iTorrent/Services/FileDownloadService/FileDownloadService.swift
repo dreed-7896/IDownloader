@@ -561,8 +561,15 @@ final class DownloadQueue {
         let handles = Array(service.torrents.values).filter { $0.snapshot.isValid }
         let existing = Set(handles.map { $0.snapshot.infoHashes.best.hex })
         requested.formIntersection(existing)
-        for handle in handles where !handle.snapshot.isPaused && !manuallyPaused.contains(handle.snapshot.infoHashes.best.hex) {
-            requested.insert(handle.snapshot.infoHashes.best.hex)
+        for handle in handles where !handle.snapshot.isPaused {
+            let key = handle.snapshot.infoHashes.best.hex
+            if manuallyPaused.contains(key) {
+                let last = lastCommands[key]
+                if last == nil || last!.0 || Date().timeIntervalSince(last!.1) >= 1 {
+                    handle.pause()
+                    lastCommands[key] = (false, Date())
+                }
+            } else { requested.insert(key) }
         }
         struct Entry {
             let key: String
@@ -618,6 +625,10 @@ extension TorrentHandle {
     func resumeDownload() {
         if Thread.isMainThread { DownloadQueue.shared.enqueue(self) }
         else { DispatchQueue.main.async { DownloadQueue.shared.enqueue(self) } }
+    }
+    func rehashDownload() {
+        if Thread.isMainThread { DownloadQueue.shared.enqueue(self); rehash() }
+        else { DispatchQueue.main.async { DownloadQueue.shared.enqueue(self); self.rehash() } }
     }
     func pauseDownload() {
         if Thread.isMainThread { DownloadQueue.shared.pause(self) }

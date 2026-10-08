@@ -177,7 +177,7 @@ extension TorrentDetailsViewModel {
         alert(title: %"details.rehash.title", message: %"details.rehash.message", style: .actionSheet, actions: [
             .init(title: %"common.cancel", style: .cancel),
             .init(title: %"details.rehash.action", style: .destructive, isPrimary: true, action: { [unowned self] in
-                torrentHandle.rehash()
+                torrentHandle.rehashDownload()
             }),
         ], sourceView: source)
     }

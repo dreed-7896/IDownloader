@@ -163,7 +163,7 @@ extension TorrentListViewModel {
         alert(title: %"details.rehash.title", message: %"details.rehash.message", actions: [
             .init(title: %"common.cancel", style: .cancel),
             .init(title: %"details.rehash.action", style: .destructive, isPrimary: true, action: {
-                torrentModels.filter { !$0.isFile }.forEach { $0.torrentHandle.rehash() }
+                torrentModels.filter { !$0.isFile }.forEach { $0.torrentHandle.rehashDownload() }
             })
         ])
     }
