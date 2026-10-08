@@ -3,9 +3,55 @@ import Foundation
 enum SharedDownloadInbox {
     static let group = "group.com.dreed7896.IDownloader.live-activity"
     static let notification = "com.dreed7896.IDownloader.sharedURL"
+    // Sideloading can replace the original group with a team-suffixed identifier.
+    // Read the groups granted to this signed bundle instead of assuming the build-time ID.
+    private static let signedGroups: [String] = {
+        let metadataGroups = Bundle.main.object(forInfoDictionaryKey: "ALTAppGroups") as? [String] ?? []
+        var provisionGroups: [String] = []
+        if let profile = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+           let data = try? Data(contentsOf: profile),
+           let start = data.range(of: Data("<plist".utf8)),
+           let end = data.range(of: Data("</plist>".utf8), in: start.lowerBound..<data.endIndex),
+           let plist = try? PropertyListSerialization.propertyList(from: data[start.lowerBound..<end.upperBound], format: nil) as? [String: Any],
+           let entitlements = plist["Entitlements"] as? [String: Any] {
+            provisionGroups = entitlements["com.apple.security.application-groups"] as? [String] ?? []
+        }
+        let candidates = provisionGroups + metadataGroups + [group]
+        var seen = Set<String>()
+        return candidates.filter { seen.insert($0).inserted }
+    }()
+
     private static var directory: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?
-            .appendingPathComponent("SharedLinks", isDirectory: true)
+        for identifier in signedGroups {
+            if let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier) {
+                return container.appendingPathComponent("SharedLinks", isDirectory: true)
+            }
+        }
+        return nil
+    }
+
+    static func link(in text: String) -> URL? {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.contains(where: { $0.isWhitespace }),
+              let url = URL(string: text), supported(url) else { return nil }
+        if url.scheme?.lowercased() == "magnet" {
+            let topics = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            guard topics.contains(where: { $0.name == "xt" && ($0.value?.lowercased().hasPrefix("urn:btih:") == true || $0.value?.lowercased().hasPrefix("urn:btmh:") == true) }) else { return nil }
+        }
+        return url
+    }
+
+    static func handoffURL(for urls: [URL] = []) -> URL {
+        var components = URLComponents()
+        components.scheme = "Pulled"
+        components.host = "shared"
+        if !urls.isEmpty { components.queryItems = urls.map { URLQueryItem(name: "url", value: $0.absoluteString) } }
+        return components.url!
+    }
+
+    static func links(from handoff: URL) -> [URL] {
+        (URLComponents(url: handoff, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+            .filter { $0.name == "url" }.compactMap { $0.value.flatMap { link(in: $0) } }
     }
 
     static func urls(in text: String) -> [URL] {

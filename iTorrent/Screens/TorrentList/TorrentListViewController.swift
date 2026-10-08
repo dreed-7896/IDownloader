@@ -46,14 +46,12 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
     private let rehashButton = UIBarButtonItem()
     private let deleteButton = UIBarButtonItem()
 
-    private lazy var delegates = Delegates(parent: self)
     private lazy var searchVC: TLSearchController = {
         let rssSeacrchViewController = viewModel.rssSearchViewModel.resolveVC()
         let searchController = TLSearchController(searchResultsController: rssSeacrchViewController)
         return searchController
     }()
 
-    private lazy var documentPicker = makeDocumentPicker()
     private let tagsView = makeTagsView()
 
     private var getToolBarItems: [UIBarButtonItem] {
@@ -80,23 +78,9 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
         searchVC.searchBar.cancelButtonClickedPublisher
             .map { "" }.assign(to: &viewModel.$searchQuery)
 
-        addButton.menu = UIMenu(title: %"list.add.title", children: [
-            UIAction(title: %"list.add.files", image: .init(systemName: "doc.fill.badge.plus")) { [unowned self] _ in
-                if #available(iOS 26.0, visionOS 26.0, *) {
-                    documentPicker.preferredTransition = .zoom(sourceBarButtonItemProvider: { [unowned self] _ in
-                        addButton
-                    })
-                    documentPicker.modalPresentationStyle = .formSheet
-                }
-                present(documentPicker, animated: true)
-            },
-            UIAction(title: %"list.add.magnet", image: .init(resource: .icMagnet)) { [unowned self] _ in
-                present(makeMagnetAlert(), animated: true)
-            },
-            UIAction(title: "Download from URL", image: .init(systemName: "link.badge.plus")) { [unowned self] _ in
-                present(makeUrlAlert(), animated: true)
-            }
-        ])
+        addButton.primaryAction = UIAction(title: %"common.add", image: .init(systemName: "plus")) { [unowned self] _ in
+            present(makeUrlAlert(), animated: true)
+        }
 
         playButton.primaryAction = .init(title: %"details.start", image: .init(systemName: "play.fill"), handler: { [unowned self] _ in
             viewModel.resumeAllSelected(at: collectionView.indexPathsForSelectedItems ?? [])
@@ -330,88 +314,50 @@ private extension TorrentListViewController {
 }
 
 private extension TorrentListViewController {
-    class Delegates: DelegateObject<TorrentListViewController>, UIDocumentPickerDelegate {
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            guard let url = urls.first else { return }
-            parent.viewModel.addTorrent(by: url)
-        }
-    }
-
-    func makeDocumentPicker() -> UIViewController {
-        let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [.init(importedAs: "com.bittorrent.torrent")], asCopy: true)
-        documentPicker.delegate = delegates
-        documentPicker.allowsMultipleSelection = false
-        documentPicker.shouldShowFileExtensions = true
-        return documentPicker
-    }
-
-    func makeMagnetAlert() -> UIAlertController {
-        let alert = UIAlertController(title: %"list.add.magnet.title", message: %"list.add.magnet.message", preferredStyle: .alert)
-
-        alert.addTextField { textField in
-            textField.placeholder = %"list.add.magnet.placeholder"
-        }
-
-        alert.addAction(.init(title: %"common.cancel", style: .cancel))
-        alert.addAction(.init(title: %"common.ok", style: .default) { [unowned self] _ in
-            guard let text = alert.textFields?.first?.text,
-                  let url = URL(string: text),
-                  let magnet = MagnetURI(with: url)
-            else {
-                let alert = UIAlertController(title: %"common.error", message: %"list.add.magnet.error", preferredStyle: .alert)
-                alert.addAction(.init(title: %"common.close", style: .cancel), isPrimary: true)
-                present(alert, animated: true)
-                return
-            }
-
-            guard !TorrentService.shared.checkTorrentExists(with: magnet.infoHashes) else {
-                let alert = UIAlertController(title: %"addTorrent.exists", message: %"addTorrent.\(magnet.infoHashes.best.hex)_exists", preferredStyle: .alert)
-                alert.addAction(.init(title: %"common.close", style: .cancel), isPrimary: true)
-                present(alert, animated: true)
-                return
-            }
-
-            TorrentService.shared.addTorrent(by: magnet)
-        }, isPrimary: true)
-        return alert
-    }
-
     func makeUrlAlert() -> UIAlertController {
-        let alert = UIAlertController(title: "Download from URL", message: "Enter a file URL, torrent URL, or magnet link.", preferredStyle: .alert)
+        let alert = UIAlertController(title: "New download", message: "Paste a file link or magnet link.", preferredStyle: .alert)
+        let clipboardLink = UIPasteboard.general.string.flatMap { SharedDownloadInbox.link(in: $0) }
 
         alert.addTextField { textField in
             textField.placeholder = "https://example.com/file.zip"
             textField.keyboardType = .URL
             textField.autocapitalizationType = .none
             textField.autocorrectionType = .no
+            textField.text = clipboardLink?.absoluteString
         }
 
         alert.addAction(.init(title: %"common.cancel", style: .cancel))
-        alert.addAction(.init(title: %"common.ok", style: .default) { [unowned self] _ in
-            Task {
-                guard let text = alert.textFields?.first?.text,
-                      let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
-                      SharedDownloadInbox.supported(url)
-                else {
-                    let alert = UIAlertController(title: %"common.error", message: %"list.add.url.error", preferredStyle: .alert)
-                    alert.addAction(.init(title: %"common.close", style: .cancel))
-                    present(alert, animated: true)
+        alert.addAction(.init(title: "Start download", style: .default) { [unowned self] _ in
+            guard let text = alert.textFields?.first?.text,
+                  let url = SharedDownloadInbox.link(in: text)
+            else {
+                showInvalidDownloadLink()
+                return
+            }
+
+            if url.scheme?.lowercased() == "magnet" {
+                guard let magnet = MagnetURI(with: url) else {
+                    showInvalidDownloadLink()
                     return
                 }
-
-                if url.scheme?.lowercased() == "magnet" {
-                    if let magnet = MagnetURI(with: url) { TorrentService.shared.addTorrent(by: magnet) }
-                } else if url.pathExtension.lowercased() == "torrent" {
-                    do {
-                        let torrentFile = try await TorrentFile.download(from: url)
-                        TorrentAddViewModel.present(with: torrentFile, from: self)
-                    } catch { presentRemoteTorrentDownloadError(error, url: url) }
-                } else {
-                    FileDownloadService.shared.add(url)
+                guard !TorrentService.shared.checkTorrentExists(with: magnet.infoHashes) else {
+                    let error = UIAlertController(title: %"addTorrent.exists", message: %"addTorrent.\(magnet.infoHashes.best.hex)_exists", preferredStyle: .alert)
+                    error.addAction(.init(title: %"common.close", style: .cancel))
+                    present(error, animated: true)
+                    return
                 }
+                TorrentService.shared.addTorrent(by: magnet)
+            } else {
+                FileDownloadService.shared.add(url)
             }
         }, isPrimary: true)
         return alert
+    }
+
+    func showInvalidDownloadLink() {
+        let error = UIAlertController(title: %"common.error", message: "Enter a valid HTTP, HTTPS, or magnet link.", preferredStyle: .alert)
+        error.addAction(.init(title: %"common.close", style: .cancel))
+        present(error, animated: true)
     }
 
     static func makeTagsView() -> TagsView {

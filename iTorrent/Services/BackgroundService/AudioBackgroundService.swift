@@ -66,14 +66,15 @@ private extension AudioBackgroundService {
         }
     }
 
-    static func cratePlayer() throws -> AVAudioPlayer {
-        //            let bundle = Bundle.main.path(forResource: "3", ofType: "wav")
-        let bundle = Bundle.main.path(forResource: "sound", ofType: "m4a")
-        let alertSound = URL(fileURLWithPath: bundle!)
+    static func createPlayer() throws -> AVAudioPlayer {
+        guard let sound = Bundle.main.url(forResource: "silence", withExtension: "wav") else {
+            throw CocoaError(.fileReadNoSuchFile)
+        }
         try AVAudioSession.sharedInstance().setCategory(.playback, options: .mixWithOthers)
         try AVAudioSession.sharedInstance().setActive(true)
-        let player = try AVAudioPlayer(contentsOf: alertSound)
-        player.volume = 0.01
+        let player = try AVAudioPlayer(contentsOf: sound)
+        // Both the PCM samples and output gain are zero: background renewal must be inaudible.
+        player.volume = 0
         player.numberOfLoops = -1
         return player
     }
@@ -83,7 +84,7 @@ private extension AudioBackgroundService {
             return player
         }
 
-        let newPlayer = try Self.cratePlayer()
+        let newPlayer = try Self.createPlayer()
         player = newPlayer
         return newPlayer
     }
@@ -92,9 +93,7 @@ private extension AudioBackgroundService {
     func playAudio() -> Bool {
         do {
             let player = try getPlayer()
-//            player.prepareToPlay()
-            player.play()
-            return true
+            return player.play()
         } catch {
             print(error)
             return false

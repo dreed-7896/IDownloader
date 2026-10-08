@@ -12,7 +12,7 @@ https://github.com/dreed-7896/IDownloader/releases/download/nightly/source.json
 
 Refresh the source and install **Pulled**. After later changes, refresh it again and update the app. A successful build on `main` publishes a new IPA and refreshes the catalog automatically; a failed build keeps the previous working download available.
 
-You can also download the IPA from [GitHub Releases](https://github.com/dreed-7896/IDownloader/releases). The IPA is unsigned, ready for LiveContainer import or signing by SideStore/AltStore. iOS/iPadOS 16 or later is required.
+You can also download the IPA from [GitHub Releases](https://github.com/dreed-7896/IDownloader/releases). The IPA is ready for LiveContainer import or signing by SideStore/AltStore. Ad hoc signatures preserve the App Group permissions for the installer; they are not a device installation certificate. iOS/iPadOS 16 or later is required.
 
 ## Features
 
@@ -31,15 +31,15 @@ You can also download the IPA from [GitHub Releases](https://github.com/dreed-78
 
 ## Downloads and sharing
 
-Files and torrents appear together on the main download list, with an icon identifying each type. Choose **Download from URL** from the add menu. Tap any download for its details, including state, speed, time remaining, size, progress, source, and save location. File downloads show one progress segment per connection and individual connection byte counts. Magnet links start torrents; `.torrent` URLs keep the torrent import flow; other HTTP/HTTPS links download files. Use a direct file link: sharing a webpage downloads that page, rather than extracting its videos or attachments.
+Files and torrents appear together on the main download list, with an icon identifying each type. Tap **+** to open the link input directly. A valid HTTP/HTTPS or magnet link in the clipboard is filled in automatically; confirm with **Start download**. Tap any download for its details, including state, speed, time remaining, size, progress, source, and save location. File downloads show one progress segment per connection and individual connection byte counts. Magnet links start torrents; HTTP/HTTPS links download files. Tap a local `.torrent` file in Files or another app to open the torrent import screen. Use a direct file link: sharing a webpage downloads that page, rather than extracting its videos or attachments.
 
 Set **Settings → Download queue → Download parts** to a number from 1 to 16. The downloader probes actual byte-range support, validates each part, and uses one connection if the server ignores ranges. The setting applies to new downloads. Files are saved in **On My iPhone → Pulled → Downloads**, in separate folders to prevent name collisions. Download progress uses the existing Live Activity/Dynamic Island layout, including speed, percentage, and time remaining.
 
-The share extension queues links in an App Group and attempts to open Pulled. If iOS declines the handoff, open Pulled to start the queued downloads; the extension shows this instruction. Share extensions must be included when signing/installing the app. A LiveContainer guest cannot register its own share extension with iOS, so install Pulled directly through SideStore/AltStore to use its own entry in the system share sheet. With recent LiveContainer versions, you can instead select **LiveContainer → Pulled** from the share sheet to forward a URL to the guest app; see [LiveContainer's sharing guide](https://github.com/LiveContainer/LiveContainer#open-in-app-support).
+The share extension resolves the App Groups in the installed signing profile, queues links in a shared container, and attempts to open Pulled. If iOS declines the handoff, open Pulled to start the queued downloads; the extension shows this instruction. If no shared container is available, the handoff carries the URLs directly. If iOS also declines that handoff, the link is copied: open Pulled and tap **+** to confirm the download. Share extensions must be included when signing/installing the app. A LiveContainer guest cannot register its own share extension with iOS, so install Pulled directly through SideStore/AltStore to use its own entry in the system share sheet. With recent LiveContainer versions, you can instead select **LiveContainer → Pulled** from the share sheet to forward a URL to the guest app; see [LiveContainer's sharing guide](https://github.com/LiveContainer/LiveContainer#open-in-app-support).
 
 **Settings → Download queue** controls active transfers and concurrent downloads across both torrents and file downloads. Each multipart file uses one queue slot, regardless of its connection count. Downloads are processed oldest first; waiting items show **Queued**, and pausing an item takes it out of the queue. Seeding has its own torrent-only limit and uses remaining active slots. Zero means unlimited.
 
-File transfers use background URLSession tasks. Pausing suspends active connections; retrying a failed transfer restarts it. iOS controls scheduling while the app is suspended, and user force-quit stops background work until the app is reopened.
+File transfers use background URLSession tasks and do not activate the torrent audio background helper. The torrent audio mode renews background execution with a zero-sample, muted audio buffer, so it emits no periodic sound. Pausing suspends active connections; retrying a failed transfer restarts it. iOS controls scheduling while the app is suspended, and user force-quit stops background work until the app is reopened.
 
 ## Development
 

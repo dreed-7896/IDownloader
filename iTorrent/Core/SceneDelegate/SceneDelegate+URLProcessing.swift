@@ -13,7 +13,9 @@ extension SceneDelegate {
     func processURL(_ url: URL) {
         Task {
             if ["pulled", "idownloader"].contains(url.scheme?.lowercased() ?? ""), url.host == "shared" {
-                consumeSharedLinks()
+                let links = SharedDownloadInbox.links(from: url)
+                if links.isEmpty { consumeSharedLinks() }
+                else { links.forEach { processURL($0) } }
                 return
             }
             let filePrefix = url.absoluteString.hasPrefix("IDownloader:hash:file-") ? "IDownloader:hash:file-" : "Pulled:hash:file-"
@@ -25,7 +27,6 @@ extension SceneDelegate {
             if tryOpenTorrentDetails(with: url) { return }
             if tryOpenAddTorrent(with: url) { return }
             if tryOpenAddMagnet(with: url) { return }
-            if url.pathExtension.lowercased() == "torrent", await tryOpenRemoteAddTorrent(with: url) { return }
             if let id = FileDownloadService.shared.add(url) { showFileDownloads(selected: id) }
         }
     }

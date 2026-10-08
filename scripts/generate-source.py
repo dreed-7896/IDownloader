@@ -42,8 +42,8 @@ app = {
     'downloadURL': download_url,
     'size': version['size'],
     'appPermissions': {
-        'entitlements': [],
-        'privacy': [{'name': k, 'usageDescription': v} for k, v in info.items() if k.startswith('NS') and k.endswith('UsageDescription')],
+        'entitlements': ['com.apple.security.application-groups'],
+        'privacy': {k: v for k, v in info.items() if k.startswith('NS') and k.endswith('UsageDescription')},
     },
 }
 source = {

@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7C013DE32C28AA3C0026A11B /* sound.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7C013DE22C28A97F0026A11B /* sound.m4a */; };
+		7C013DE32C28AA3C0026A11B /* silence.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7C013DE22C28A97F0026A11B /* silence.wav */; };
 		7C013DE42C2F38AA0026A11B /* LocalizationAttribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1352D1D2BBC2F7F00104E7B /* LocalizationAttribute.swift */; };
 		7C013DE52C2F41760026A11B /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = D1AA00CF2AFAC7D200B74629 /* Localizable.xcstrings */; };
 		7C1C08AA2C31F2F800569B45 /* PauseTorrentIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C1C08A92C31F2F000569B45 /* PauseTorrentIntent.swift */; };
@@ -329,7 +329,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		7C013DE22C28A97F0026A11B /* sound.m4a */ = {isa = PBXFileReference; lastKnownFileType = file; path = sound.m4a; sourceTree = "<group>"; };
+		7C013DE22C28A97F0026A11B /* silence.wav */ = {isa = PBXFileReference; lastKnownFileType = file; path = silence.wav; sourceTree = "<group>"; };
 		7C1C08A92C31F2F000569B45 /* PauseTorrentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PauseTorrentIntent.swift; sourceTree = "<group>"; };
 		7C1C08AC2C31FEA000569B45 /* IntentsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntentsService.swift; sourceTree = "<group>"; };
 		7C1CB72B2FDEC4E7000CCD0D /* RendererRouteMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RendererRouteMenuView.swift; sourceTree = "<group>"; };
@@ -1220,7 +1220,7 @@
 		D173D9E42BC0330600E4F9EB /* BackgroundService */ = {
 			isa = PBXGroup;
 			children = (
-				7C013DE22C28A97F0026A11B /* sound.m4a */,
+				7C013DE22C28A97F0026A11B /* silence.wav */,
 				D173D9E72BC033CF00E4F9EB /* 3.wav */,
 				D173D9E22BC0327D00E4F9EB /* BackgroundService.swift */,
 				D173D9E52BC0331300E4F9EB /* AudioBackgroundService.swift */,
@@ -1843,7 +1843,7 @@
 				7CF6DA372C0F6D150033D03F /* InfoPlist.xcstrings in Resources */,
 				D1DB71922BD92238007F9267 /* PatreonPreferencesViewController.xib in Resources */,
 				7C5FBE2A2BBDD4030069E5A0 /* PRColorPickerCell.xib in Resources */,
-				7C013DE32C28AA3C0026A11B /* sound.m4a in Resources */,
+				7C013DE32C28AA3C0026A11B /* silence.wav in Resources */,
 				D1A226A52AEEEFCC00669D6D /* Main.storyboard in Resources */,
 				D1352D222BBC33A000104E7B /* BasePreferencesViewController.xib in Resources */,
 				D1A226FA2AEF04E200669D6D /* TorrentListViewController.xib in Resources */,

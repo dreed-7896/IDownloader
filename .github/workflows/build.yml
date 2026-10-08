@@ -37,6 +37,8 @@ jobs:
             DEVELOPMENT_TEAM='' PROVISIONING_PROFILE_SPECIFIER='' \
             MARKETING_VERSION="1.0.$BUILD_NUMBER" CURRENT_PROJECT_VERSION="$BUILD_NUMBER.$BUILD_ATTEMPT" \
             archive | tee "$RUNNER_TEMP/build.log"
+      - name: Preserve App Group entitlements for sideload signing
+        run: python3 scripts/prepare-signing.py "$RUNNER_TEMP/Pulled.xcarchive/Products/Applications/Pulled.app"
       - name: Package IPA and source
         env:
           BUILD_NUMBER: ${{ github.run_number }}

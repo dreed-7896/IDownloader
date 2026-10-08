@@ -69,24 +69,30 @@ final class ShareViewController: UIViewController {
         guard !loading else { return }
         loading = true
         addButton.isEnabled = false
+        let queued: Bool
         do {
             try SharedDownloadInbox.enqueue(urls)
-            // The inbox survives extension termination and denied URL handoffs.
-            extensionContext?.open(URL(string: "Pulled://shared")!) { [weak self] opened in
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    if opened { self.done() }
-                    else {
-                        self.statusLabel.text = "Added to Pulled. Open Pulled to start your download."
-                        if let stack = self.addButton.superview as? UIStackView,
-                           let close = stack.arrangedSubviews.last as? UIButton { close.setTitle("Done", for: .normal) }
-                    }
-                }
-            }
+            queued = true
         } catch {
-            loading = false
-            addButton.isEnabled = true
-            statusLabel.text = "Could not share this link: \(error.localizedDescription)"
+            // Carry the links directly when signing provides no shared container.
+            queued = false
+        }
+        guard let extensionContext else { return }
+        extensionContext.open(SharedDownloadInbox.handoffURL(for: queued ? [] : urls)) { [weak self] opened in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if opened { self.done(); return }
+                if queued {
+                    self.statusLabel.text = "Added to Pulled. Open Pulled to start your download."
+                } else {
+                    UIPasteboard.general.string = self.urls.map(\.absoluteString).joined(separator: "\n")
+                    self.statusLabel.text = self.urls.count == 1
+                        ? "Link copied. Open Pulled and tap + to start the download."
+                        : "Links copied. Open Pulled and paste each link using + to start downloading."
+                }
+                if let stack = self.addButton.superview as? UIStackView,
+                   let close = stack.arrangedSubviews.last as? UIButton { close.setTitle("Done", for: .normal) }
+            }
         }
     }
 
