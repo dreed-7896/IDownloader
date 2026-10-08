@@ -20,5 +20,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch --depth=1 https://github.com/XITRIX/iTorrent.git main
           git read-tree --reset -u FETCH_HEAD
+          # Preserve our existing workflow files so the GitHub App token
+          # does not need the special workflows permission.
+          git restore --source=HEAD --staged --worktree -- .github
           git commit -m "Import iTorrent source as independent IDownloader project"
           git push origin HEAD:main
