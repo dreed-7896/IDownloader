@@ -1,6 +1,6 @@
 //
 //  MetaAdsManager.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 04.05.2024.
 //

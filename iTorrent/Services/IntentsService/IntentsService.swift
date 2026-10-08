@@ -1,6 +1,6 @@
 //
 //  IntentsService.swift
-//  iTorrent
+//  Pulled
 //
 //  Created by Даниил Виноградов on 30.06.2024.
 //
@@ -16,7 +16,7 @@ actor IntentsService {
                       let torrentHandle = TorrentService.shared.torrents.values.first(where: { $0.snapshot.infoHashes.best.hex == hash })
                 else { return }
                 
-                torrentHandle.pause()
+                torrentHandle.pauseDownload()
             }
         }
     }

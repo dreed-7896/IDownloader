@@ -18,13 +18,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "iTorrent"
+            "value" : "Pulled"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iTorrent"
+            "value" : "Pulled"
           }
         }
       }
@@ -36,7 +36,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "iTorrent uses the local network to discover playback devices and cast video on your network."
+            "value" : "Pulled uses the local network to discover playback devices and cast video on your network."
           }
         }
       }

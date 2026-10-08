@@ -1,6 +1,6 @@
 //
 //  PreferencesViewModel.swift
-//  iTorrent
+//  Pulled
 //
 //  Created by Daniil Vinogradov on 06/11/2023.
 //
@@ -69,6 +69,7 @@ private extension PreferencesViewModel {
 //            })
         })
 
+
 #if IS_SUPPORT_LOCATION_BG
         sections.append(.init(id: "background", header: %"preferences.background") {
             PRSwitchViewModel(with: .init(title: %"preferences.background.enable", value: preferences.$isBackgroundDownloadEnabled.binding))
@@ -91,26 +92,33 @@ private extension PreferencesViewModel {
             PRSwitchViewModel(with: .init(title: %"preferences.seeding.stopOnFinish", value: preferences.$stopSeedingOnFinish.binding, isDangerous: true))
         })
 
-        sections.append(.init(id: "torrentQueueLimits", header: %"preferences.queueLimits") {
-            PRButtonViewModel(with: .init(title: %"preferences.queueLimits.active", value: preferences.$maxActiveTorrents.map { $0 == 0 ? %"preferences.speedLimits.unlimited" : "\($0)" }.eraseToAnyPublisher()) { [unowned self] in
-                textInput(title: %"preferences.queueLimits.active", placeholder: %"preferences.speedLimits.unlimited", defaultValue: "\(preferences.maxActiveTorrents)", type: .numberPad) { [unowned self] res in
+        sections.append(.init(id: "downloadQueue", header: "Download queue", footer: "Active and downloading limits are shared by files and torrents. Zero means unlimited. Download parts applies to new file downloads; servers without range support use one connection.") {
+            PRButtonViewModel(with: .init(title: "Active transfers", value: preferences.$maxActiveTorrents.map { $0 == 0 ? %"preferences.speedLimits.unlimited" : "\($0)" }.eraseToAnyPublisher()) { [unowned self] in
+                textInput(title: "Active transfers", placeholder: %"preferences.speedLimits.unlimited", defaultValue: "\(preferences.maxActiveTorrents)", type: .numberPad) { [unowned self] res in
                     dismissSelection.send()
                     guard let res else { return }
-                    preferences.maxActiveTorrents = Int(res) ?? 0
+                    preferences.maxActiveTorrents = max(0, Int(res) ?? 0)
                 }
             })
-            PRButtonViewModel(with: .init(title: %"preferences.queueLimits.downloading", value: preferences.$maxDownloadingTorrents.map { $0 == 0 ? %"preferences.speedLimits.unlimited" : "\($0)" }.eraseToAnyPublisher()) { [unowned self] in
-                textInput(title: %"preferences.queueLimits.downloading", placeholder: %"preferences.speedLimits.unlimited", defaultValue: "\(preferences.maxDownloadingTorrents)", type: .numberPad) { [unowned self] res in
+            PRButtonViewModel(with: .init(title: "Downloading", value: preferences.$maxDownloadingTorrents.map { $0 == 0 ? %"preferences.speedLimits.unlimited" : "\($0)" }.eraseToAnyPublisher()) { [unowned self] in
+                textInput(title: "Downloading", placeholder: %"preferences.speedLimits.unlimited", defaultValue: "\(preferences.maxDownloadingTorrents)", type: .numberPad) { [unowned self] res in
                     dismissSelection.send()
                     guard let res else { return }
-                    preferences.maxDownloadingTorrents = Int(res) ?? 0
+                    preferences.maxDownloadingTorrents = max(0, Int(res) ?? 0)
                 }
             })
-            PRButtonViewModel(with: .init(title: %"preferences.queueLimits.uploading", value: preferences.$maxUploadingTorrents.map { $0 == 0 ? %"preferences.speedLimits.unlimited" : "\($0)" }.eraseToAnyPublisher()) { [unowned self] in
-                textInput(title: %"preferences.queueLimits.uploading", placeholder: %"preferences.speedLimits.unlimited", defaultValue: "\(preferences.maxUploadingTorrents)", type: .numberPad) { [unowned self] res in
+            PRButtonViewModel(with: .init(title: "Seeding torrents", value: preferences.$maxUploadingTorrents.map { $0 == 0 ? %"preferences.speedLimits.unlimited" : "\($0)" }.eraseToAnyPublisher()) { [unowned self] in
+                textInput(title: "Seeding torrents", placeholder: %"preferences.speedLimits.unlimited", defaultValue: "\(preferences.maxUploadingTorrents)", type: .numberPad) { [unowned self] res in
                     dismissSelection.send()
                     guard let res else { return }
-                    preferences.maxUploadingTorrents = Int(res) ?? 0
+                    preferences.maxUploadingTorrents = max(0, Int(res) ?? 0)
+                }
+            })
+            PRButtonViewModel(with: .init(title: "Download parts", value: preferences.$fileDownloadParts.map { "\($0)" }.eraseToAnyPublisher()) { [unowned self] in
+                textInput(title: "Download parts", message: "Choose between 1 and 16 parts.", placeholder: "4", defaultValue: "\(preferences.fileDownloadParts)", type: .numberPad) { [unowned self] result in
+                    dismissSelection.send()
+                    guard let result, let parts = Int(result), (1...16).contains(parts) else { return }
+                    preferences.fileDownloadParts = parts
                 }
             })
         })
@@ -161,19 +169,14 @@ private extension PreferencesViewModel {
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
         let appBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
         let libtorrentVersion = TorrentService.version
-        let version = "iTorrent: v\(appVersion)-\(appBuild) | LibTorrent: v\(libtorrentVersion)"
+        let version = "Pulled: v\(appVersion)-\(appBuild) | LibTorrent: v\(libtorrentVersion)"
         sections.append(.init(id: "version", header: %"preferences.version", footer: version, style: .insetGrouped) {
             PRButtonViewModel(with: .init(title: %"preferences.version.github", value: Just(%"common.open").eraseToAnyPublisher(), selectAction: { [unowned self] in
-                UIApplication.shared.open(.init(string: "https://github.com/XITRIX/iTorrent")!)
+                UIApplication.shared.open(.init(string: "https://github.com/dreed-7896/IDownloader")!)
                 dismissSelection.send()
             }))
         })
 
-        sections.append(.init(id: "donations", header: %"preferences.donations") {
-            PRButtonViewModel(with: .init(title: %"preferences.donations.patreon", accessories: [.disclosureIndicator()]) { [unowned self] in
-                navigate(to: PatreonPreferencesViewModel.self, by: .show)
-            })
-        })
     }
 
     func uiAction(from interfaceStyle: UIUserInterfaceStyle) -> UIAction {

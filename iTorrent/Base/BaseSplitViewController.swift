@@ -1,6 +1,6 @@
 //
 //  BaseSplitViewController.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 01/11/2023.
 //
@@ -203,7 +203,7 @@ private extension BaseSplitViewController {
 
     struct EmptyView: View {
         var body: some View {
-            Image(.iTorrentLogo)
+            Image(.downloaderLogo)
                 .foregroundStyle(Color.secondary)
                 .ignoresSafeArea()
         }

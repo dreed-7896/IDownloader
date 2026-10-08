@@ -1,150 +1,64 @@
-[AltStore Classic Button]: https://img.shields.io/badge/Download-AltStore_Classic-green?style=flat
-[AltStore Classic Link]: https://intradeus.github.io/http-protocol-redirector?r=altstore-classic://source?url=https://xitrix.github.io/iTorrent/AltStore.json 'Download with AltStore Classic.'
+# Pulled
 
-[AltStore PAL Button]: https://img.shields.io/badge/Download-AltStore_PAL-green?style=flat
-[AltStore PAL Link]: https://intradeus.github.io/http-protocol-redirector?r=altstore-classic://source?url=https://xitrix.github.io/iTorrent/AltStoreEU.json 'Download with AltStore.'
+An iOS download manager maintained by Raahat. Download files over HTTP/HTTPS and torrents, subscribe to RSS feeds, manage files, and play videos.
 
-[SideStore Button]: https://img.shields.io/badge/Download-SideStore-purple?style=flat
-[SideStore Link]: https://intradeus.github.io/http-protocol-redirector?r=sidestore://source?url=https://xitrix.github.io/iTorrent/AltStore.json 'Download with SideStore.'
+## Install and test
 
-[Jailbreak Button]: https://img.shields.io/badge/Download-Jailbreak-red?style=flat
-[Jailbreak Link]: https://intradeus.github.io/http-protocol-redirector?r=itms-services://?action=download-manifest&url=https://github.com/XITRIX/iTorrent/releases/latest/download/manifest.plist 'Download with Jailbreak.'
+Add this source URL in **LiveContainer** or **SideStore**:
 
-[GitHub Button]: https://img.shields.io/badge/Download-GitHub-black?style=flat
-[GitHub Link]: https://github.com/XITRIX/iTorrent/releases 'Download from GitHub.'
+```
+https://github.com/dreed-7896/IDownloader/releases/download/nightly/source.json
+```
 
-<img align="left" width="100" height="100" src="https://github.com/user-attachments/assets/0faf6075-273b-4b74-92d6-dccab7f4b964">
+Refresh the source and install **Pulled**. After later changes, refresh it again and update the app. A successful build on `main` publishes a new IPA and refreshes the catalog automatically; a failed build keeps the previous working download available.
 
+You can also download the IPA from [GitHub Releases](https://github.com/dreed-7896/IDownloader/releases). The IPA is unsigned, ready for LiveContainer import or signing by SideStore/AltStore. iOS/iPadOS 16 or later is required.
 
-# iTorrent - iOS Torrent client App
-[![AltStore Classic Button]][AltStore Classic Link]
-[![SideStore Button]][SideStore Link]
-[![GitHub Button]][GitHub Link]
-[![Jailbreak Button]][Jailbreak Link]
-![](https://img.shields.io/badge/iOS-16.0+-blue.svg)
+## Features
 
-## Installation for EU citizens
-Because Apple allows third-party app stores in the EU and a few other countries, iTorrent is available on AltStore PAL. You can download it using the button below.
+- Torrent and magnet link downloads
+- Direct HTTP/HTTPS file downloads with up to 16 parallel parts (4 by default)
+- Automatic single-connection fallback when a server does not support byte ranges
+- Share HTTP/HTTPS or magnet links to Pulled from other apps
+- File download history, pause/resume, retry, preview, and deletion
+- Pause, resume, download priorities, and speed limits
+- RSS feed subscriptions
+- Files app integration and WebDAV sharing
+- Built-in VLC playback with AirPlay and Picture in Picture
+- Background download modes
+- Live Activities and Dynamic Island progress
+- iPhone and iPad layouts, themes, and alternate icons
 
-[![AltStore PAL Button]][AltStore PAL Link]
+## Downloads and sharing
 
-For everyone else, unfortunately, there is no official way to install the app, so you will need to sideload it using AltStore or SideStore. You can find installation links above if you already have one of these apps installed on your phone.
+Files and torrents appear together on the main download list, with an icon identifying each type. Choose **Download from URL** from the add menu. Tap any download for its details, including state, speed, time remaining, size, progress, source, and save location. File downloads show one progress segment per connection and individual connection byte counts. Magnet links start torrents; `.torrent` URLs keep the torrent import flow; other HTTP/HTTPS links download files. Use a direct file link: sharing a webpage downloads that page, rather than extracting its videos or attachments.
 
-> [!WARNING]
-> The only officially supported methods to sideload iTorrent are AltStore and SideStore. If you sideload iTorrent in any other way, there are no guarantees the app will work as intended, and no technical support will be provided.
+Set **Settings → Download queue → Download parts** to a number from 1 to 16. The downloader probes actual byte-range support, validates each part, and uses one connection if the server ignores ranges. The setting applies to new downloads. Files are saved in **On My iPhone → Pulled → Downloads**, in separate folders to prevent name collisions. Download progress uses the existing Live Activity/Dynamic Island layout, including speed, percentage, and time remaining.
 
-## Screenshots
-<details>
-<summary>iPhone Screenshots</summary>
-  <p float="left">
-  <img width="250" src="https://github.com/user-attachments/assets/73256524-4861-4b8f-afba-5bd657badb2f" />
-  <img width="250" src="https://github.com/user-attachments/assets/9ac2c682-a3b4-4498-8daa-6c5c6f742946" />
-  <img width="250" src="https://github.com/user-attachments/assets/c2f06516-862a-47b5-b69b-aed4f6043aae" />
-  <img width="250" src="https://github.com/user-attachments/assets/c7dff083-4fe7-4440-9961-9eb472e22142" />
-  <img width="250" src="https://github.com/user-attachments/assets/be15d663-0d5b-40ed-aa6c-1f3eb9e00a1e" />
-  <img width="250" src="https://github.com/user-attachments/assets/20aac5d9-8746-4357-b1d8-7aa15bac2747" />
-  </p>
-</details>
+The share extension queues links in an App Group and attempts to open Pulled. If iOS declines the handoff, open Pulled to start the queued downloads; the extension shows this instruction. Share extensions must be included when signing/installing the app. A LiveContainer guest cannot register its own share extension with iOS, so install Pulled directly through SideStore/AltStore to use its own entry in the system share sheet. With recent LiveContainer versions, you can instead select **LiveContainer → Pulled** from the share sheet to forward a URL to the guest app; see [LiveContainer's sharing guide](https://github.com/LiveContainer/LiveContainer#open-in-app-support).
 
-<details>
-<summary>iPad Screenshots</summary>
-  <p float="left">
-  <img width="378" src="https://github.com/user-attachments/assets/5152a496-6949-4c33-a0b9-4ec9e1ea32e8" />
-  <img width="378" src="https://github.com/user-attachments/assets/5af9eb69-4eb4-419c-bcae-2b42f5553eea" />
-  </p>
-</details>
+**Settings → Download queue** controls active transfers and concurrent downloads across both torrents and file downloads. Each multipart file uses one queue slot, regardless of its connection count. Downloads are processed oldest first; waiting items show **Queued**, and pausing an item takes it out of the queue. Seeding has its own torrent-only limit and uses remaining active slots. Zero means unlimited.
 
-## Info
+File transfers use background URLSession tasks. Pausing suspends active connections; retrying a failed transfer restarts it. iOS controls scheduling while the app is suspended, and user force-quit stops background work until the app is reopened.
 
-It is an ordinary torrent client for iOS with Files app support.
+## Development
 
-What can this app do:
-- Download in the background
-- Live Activity and Dynamic Island progress widget
-- Built-in VLC player with AirPlay and Pictire in Picture support
-- Sequential download (use VLC to watch films while loading)
-- Add torrent files from Share menu (Safari and other apps)
-- Add magnet links directly from Safari
-- Store files in Files app
-- File sharing directly from app
-- Download torrent by link
-- Download torrent by magnet
-- Send notification on torrent downloaded
-- WebDav Server
-- Select files to download or not
-- Glass UI for iOS 26
-- RSS Feed
-- ??? 
+Clone with submodules:
 
-## Localization
+```sh
+git clone --recurse-submodules https://github.com/dreed-7896/IDownloader.git
+cd IDownloader
+brew install boost
+./Submodules/LibTorrent-Swift/make.sh
+open iTorrent.xcworkspace
+```
 
-iTorrent supports the following languages:
-- English
-- German
-- Italian
-- Polish
-- Russian
-- Spanish
-- Simplified Chinese
+Use Xcode 26.6 and the `iTorrent` scheme. The inherited workspace and target names are retained as internal build identifiers. The installed app is named `Pulled`. Its existing bundle identity (`com.dreed7896.IDownloader`), App Group, and background session identifiers are retained so updates preserve downloads, settings, sharing, and Live Activities. The repository and source URL stay stable.
 
-If you are fluent in the languages not listed above and want to help with translation, you are welcome!
+The **Build and publish Pulled** workflow builds each push to `main`. Each build gets its own version (`1.0.<run number>`) and permanent release download URL. The source metadata reads the version, bundle identifier, minimum iOS version, and size from the actual packaged IPA.
 
-## Libraries used
+## Credits and license
 
-- [LibTorrent](https://github.com/arvidn/libtorrent)
-- [OpenSSL](https://github.com/krzyzanowskim/OpenSSL)
-- [SwiftVLC](https://github.com/harflabs/SwiftVLC)
-- [MvvmFoundation](https://github.com/XITRIX/MVVMFoundation)
-- [CombineCocoa](https://github.com/XITRIX/CombineCocoa)
-- [SWXMLHash](https://github.com/drmohundro/SWXMLHash)
-- [MarqueeText](https://github.com/joekndy/MarqueeText)
-- [MarqueeLabel](https://github.com/cbpowell/MarqueeLabel)
-- [GCDWebServer](https://github.com/XITRIX/GCDWebServer)
-- [Firebase](https://github.com/firebase/firebase-ios-sdk)
+Pulled is based on [iTorrent by XITRIX (Daniil Vinogradov)](https://github.com/XITRIX/iTorrent), distributed under the [MIT license](LICENSE.txt). The original copyright notice is preserved. This is an independently maintained project and does not automatically synchronize with upstream.
 
-## Donate for donuts
-
-- [Patreon](https://www.patreon.com/xitrix)
-- [PayPal](https://paypal.me/x1trix)
-
-## Important information
-
-This app using Firebase Analytics and so it collects next information from your device:
-- The country of your internet provider
-- Time of app's working session
-
-All this data presents as statistic, and cannot be used to get someone's personal information
-
-Also this app using Firebase Crashlytics, which collects the next information when application crashes:
-- Model of your device (IPhone X or IPad Pro (10.5 inch) for example)
-- Device orientation
-- Free space on RAM and ROM
-- IOS version
-- Time of crash
-- Detailed log of the thread where the stuck happens
-
-All this information is using for bug fixing and improving the quality of this app
-
-More information you can find on [Firebase website](https://firebase.google.com)
-
-## License
-
-Copyright (c) 2024 XITRIX (Vinogradov Daniil)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal 
-in the Software without restriction, including without limitation the rights 
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Includes LibTorrent, LibTorrent-Swift, MVVMFoundation, GCDWebServer, SwiftVLC, and other dependencies under their respective licenses.

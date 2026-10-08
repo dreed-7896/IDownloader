@@ -1,6 +1,6 @@
 //
 //  TorrentMonitoringService.swift
-//  iTorrent
+//  Pulled
 //
 //  Created by Daniil Vinogradov on 03/04/2024.
 //
@@ -31,7 +31,7 @@ private extension TorrentMonitoringService {
               !handle.snapshot.isPaused
         else { return }
 
-        handle.pause()
+        handle.pauseDownload()
     }
 
     func checkDoneNotification(with model: TorrentService.TorrentUpdateModel) {
@@ -44,7 +44,7 @@ private extension TorrentMonitoringService {
         else { return }
 
         if PreferencesStorage.shared.stopSeedingOnFinish {
-            handle.pause()
+            handle.pauseDownload()
         }
 
         let content = UNMutableNotificationContent()

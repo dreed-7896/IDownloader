@@ -1,6 +1,6 @@
 //
 //  NavigationItemPalette.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 14.11.2024.
 //

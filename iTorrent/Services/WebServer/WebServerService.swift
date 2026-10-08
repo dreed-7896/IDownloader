@@ -1,6 +1,6 @@
 //
 //  WebServerService.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 23/04/2024.
 //

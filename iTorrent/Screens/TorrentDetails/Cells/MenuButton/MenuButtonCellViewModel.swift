@@ -1,6 +1,6 @@
 //
 //  MenuButtonCellViewModel.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 03.04.2026.
 //

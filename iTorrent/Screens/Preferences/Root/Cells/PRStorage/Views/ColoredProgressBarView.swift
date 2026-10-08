@@ -1,6 +1,6 @@
 //
 //  ColoredProgressBarView.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 21.03.2020.
 //  Copyright © 2020  XITRIX. All rights reserved.

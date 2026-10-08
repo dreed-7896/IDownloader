@@ -1,6 +1,6 @@
 //
 //  UIScrollEdgeEffectStyle+Private.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 25.08.2026.
 //

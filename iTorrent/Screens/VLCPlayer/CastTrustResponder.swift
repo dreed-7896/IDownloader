@@ -1,6 +1,6 @@
 //
 //  CastTrustResponder.swift
-//  iTorrent
+//  IDownloader
 //
 
 import SwiftVLC

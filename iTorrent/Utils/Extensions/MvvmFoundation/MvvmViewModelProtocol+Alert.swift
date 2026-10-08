@@ -1,6 +1,6 @@
 //
 //  MvvmViewModelProtocol+Alert.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 07.04.2024.
 //

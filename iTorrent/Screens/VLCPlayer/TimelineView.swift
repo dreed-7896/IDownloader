@@ -1,6 +1,6 @@
 //
 //  TimelineView.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 26.03.2026.
 //

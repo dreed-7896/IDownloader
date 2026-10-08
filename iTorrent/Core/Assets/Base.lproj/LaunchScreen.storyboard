@@ -37,7 +37,7 @@
                         <rect key="frame" x="0.0" y="0.0" width="552.66666666666674" height="430"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="iTorrentLogo" translatesAutoresizingMaskIntoConstraints="NO" id="Qz6-oa-DOV">
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="DownloaderLogo" translatesAutoresizingMaskIntoConstraints="NO" id="Qz6-oa-DOV">
                                 <rect key="frame" x="148.33333333333331" y="76.666666666666686" width="256" height="256"/>
                             </imageView>
                         </subviews>
@@ -53,7 +53,7 @@
             </objects>
             <point key="canvasLocation" x="497" y="756"/>
         </scene>
-        <!--iTorrent-->
+        <!--Pulled-->
         <scene sceneID="IXq-Fm-zQi">
             <objects>
                 <viewController id="Y5r-dd-xf5" sceneMemberID="viewController">
@@ -87,7 +87,7 @@
                         <barButtonItem systemItem="flexibleSpace" id="XPR-wn-2OI"/>
                         <barButtonItem title="Item" image="gearshape.fill" catalog="system" id="qMc-KD-V1h"/>
                     </toolbarItems>
-                    <navigationItem key="navigationItem" title="iTorrent" largeTitleDisplayMode="always" id="bmc-yK-sej">
+                    <navigationItem key="navigationItem" title="Pulled" largeTitleDisplayMode="always" id="bmc-yK-sej">
                         <barButtonItem key="leftBarButtonItem" systemItem="edit" id="Pfp-Zv-tlg"/>
                         <rightBarButtonItems>
                             <barButtonItem image="ic_sort" id="f0u-aT-hV9"/>
@@ -118,7 +118,7 @@
     <color key="tintColor" name="AccentColor"/>
     <resources>
         <image name="gearshape.fill" catalog="system" width="128" height="123"/>
-        <image name="iTorrentLogo" width="256" height="256"/>
+        <image name="DownloaderLogo" width="256" height="256"/>
         <image name="ic_rss" width="8" height="8"/>
         <image name="ic_sort" width="9" height="9"/>
         <namedColor name="AccentColor">

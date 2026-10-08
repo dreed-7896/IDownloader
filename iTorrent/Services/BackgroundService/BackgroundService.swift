@@ -1,6 +1,6 @@
 //
 //  BackgroundService.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 05/04/2024.
 //
@@ -64,6 +64,7 @@ class BackgroundService: BackgroundServiceProtocol {
 extension BackgroundService {
     static var isBackgroundNeeded: Bool {
         TorrentService.shared.torrents.values.contains(where: { $0.snapshot.needBackground })
+            || FileDownloadService.shared.downloads.contains(where: \.isActive)
     }
 }
 

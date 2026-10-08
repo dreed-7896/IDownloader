@@ -45,7 +45,7 @@
                                         </label>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="1000" verticalCompressionResistancePriority="1000" textAlignment="center" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="rbg-8n-rlp">
                                             <rect key="frame" x="0.0" y="179.33333333333331" width="361" height="180.33333333333331"/>
-                                            <string key="text">By default iTorrent prefers not to allow cellular usage because of most cellular plans does not support unlimited download and / or upload trafic.
+                                            <string key="text">By default Pulled prefers not to allow cellular usage because of most cellular plans does not support unlimited download and / or upload trafic.
 
 You can always change this setting in application preferences.</string>
                                             <fontDescription key="fontDescription" style="UICTFontTextStyleBody"/>

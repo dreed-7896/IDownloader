@@ -1,6 +1,6 @@
 //
 //  URL+Normalization.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 05/07/2024.
 //

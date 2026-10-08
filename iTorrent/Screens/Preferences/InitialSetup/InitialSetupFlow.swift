@@ -1,6 +1,6 @@
 //
 //  InitialSetupFlow.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 23.12.2024.
 //

@@ -1,6 +1,6 @@
 //
 //  AppDelegate.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 29/10/2023.
 //
@@ -15,6 +15,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         registerPushNotifications(application)
         registerBackgroundRefresh()
         registerRemoteConfig()
+        _ = FileDownloadService.shared
+        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), nil, { _, _, _, _, _ in
+            DispatchQueue.main.async {
+                UIApplication.shared.connectedScenes.compactMap { $0.delegate as? SceneDelegate }.first?.consumeSharedLinks()
+            }
+        }, SharedDownloadInbox.notification as CFString, nil, .deliverImmediately)
         return true
     }
 
@@ -39,5 +45,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationWillTerminate(_ application: UIApplication) {
         LiveActivityService.endAllLiveActivities()
+    }
+
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        guard identifier == FileDownloadService.sessionIdentifier else { completionHandler(); return }
+        FileDownloadService.shared.backgroundCompletion = completionHandler
     }
 }
