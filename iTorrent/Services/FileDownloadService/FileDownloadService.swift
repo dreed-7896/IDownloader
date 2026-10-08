@@ -573,7 +573,7 @@ final class DownloadQueue {
         }
         var entries = handles.filter { requested.contains($0.snapshot.infoHashes.best.hex) && $0.snapshot.friendlyState != .storageError }.map {
             Entry(key: $0.snapshot.infoHashes.best.hex, date: $0.metadata.dateAdded, torrent: $0, file: nil,
-                  isSeed: $0.snapshot.progress >= 1)
+                  isSeed: $0.snapshot.isFinished)
         }
         entries += files.downloads.filter { $0.queueEligible && $0.state != .assembling }.map {
             Entry(key: $0.activityID, date: $0.createdAt, torrent: nil, file: $0.id, isSeed: false)
@@ -615,6 +615,12 @@ final class DownloadQueue {
 }
 
 extension TorrentHandle {
-    func resumeDownload() { DownloadQueue.shared.enqueue(self) }
-    func pauseDownload() { DownloadQueue.shared.pause(self) }
+    func resumeDownload() {
+        if Thread.isMainThread { DownloadQueue.shared.enqueue(self) }
+        else { DispatchQueue.main.async { DownloadQueue.shared.enqueue(self) } }
+    }
+    func pauseDownload() {
+        if Thread.isMainThread { DownloadQueue.shared.pause(self) }
+        else { DispatchQueue.main.async { DownloadQueue.shared.pause(self) } }
+    }
 }

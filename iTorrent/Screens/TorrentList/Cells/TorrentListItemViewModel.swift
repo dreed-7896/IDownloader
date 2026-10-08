@@ -11,11 +11,17 @@ class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectable
     var isFile: Bool { fileID != nil }
     var kindIcon: String { isFile ? "arrow.down.circle.fill" : "network" }
     var file: FileDownload? { FileDownloadService.shared.downloads.first { $0.id == fileID } }
-    var listState: TorrentHandle.State { isFile ? (file?.listState ?? .finished) : torrentHandle.snapshot.friendlyState }
+    var listState: TorrentHandle.State {
+        if isFile { return file?.listState ?? .finished }
+        if DownloadQueue.shared.isQueued(torrentHandle) { return .paused }
+        let snapshot = torrentHandle.snapshot
+        if snapshot.isPaused && !snapshot.isFinished && snapshot.friendlyState != .storageError { return .paused }
+        return snapshot.friendlyState
+    }
     var addedDate: Date { isFile ? (file?.createdAt ?? .distantPast) : torrentHandle.metadata.dateAdded }
     var creationDate: Date { isFile ? (file?.createdAt ?? .distantPast) : (torrentHandle.snapshot.creationDate ?? addedDate) }
     var size: UInt64 { isFile ? UInt64(max(0, file?.totalBytes ?? 0)) : torrentHandle.snapshot.totalWanted }
-    var canResume: Bool { isFile ? file.map { [.paused, .failed].contains($0.state) } ?? false : torrentHandle.snapshot.canResume }
+    var canResume: Bool { isFile ? file.map { [.paused, .failed].contains($0.state) } ?? false : (torrentHandle.snapshot.canResume && !DownloadQueue.shared.isQueued(torrentHandle)) }
     var canPause: Bool { isFile ? file.map { [.queued, .preparing, .downloading].contains($0.state) } ?? false : (torrentHandle.snapshot.canPause || DownloadQueue.shared.isQueued(torrentHandle)) }
 
     @Published var title = ""
@@ -79,7 +85,7 @@ class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectable
             progress = file.progress
             let received = UInt64(max(0, file.receivedBytes)).bitrateToHumanReadable
             let total = file.totalBytes > 0 ? UInt64(file.totalBytes).bitrateToHumanReadable : "Unknown size"
-            progressText = "\(received) of \(total) (\(String(format: "%.2f", progress * 100))%)"
+            progressText = file.totalBytes > 0 ? "\(received) of \(total) (\(String(format: "%.2f", progress * 100))%)" : "\(received) downloaded (size unknown)"
             statusText = file.stateTitle
             if file.state == .downloading {
                 statusText += " - ↓ \(file.speed.bitrateToHumanReadable)/s - \(file.timeRemaining)"

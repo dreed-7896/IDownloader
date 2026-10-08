@@ -3,7 +3,7 @@ import MvvmFoundation
 import QuickLook
 import UIKit
 
-final class FileDownloadDetailsViewModel: BaseCollectionViewModelWith<UUID> {
+class FileDownloadDetailsViewModel: BaseCollectionViewModelWith<UUID> {
     var id: UUID!
     @Published var title = ""
     @Published var canResume = false
@@ -71,7 +71,7 @@ final class FileDownloadDetailsViewModel: BaseCollectionViewModelWith<UUID> {
         added.detail = DateFormatter.localizedString(from: item.createdAt, dateStyle: .medium, timeStyle: .short)
         total.detail = item.totalBytes > 0 ? bytes(item.totalBytes) : "Unknown size"
         received.detail = bytes(item.receivedBytes)
-        percentage.detail = String(format: "%.2f%%", item.progress * 100)
+        percentage.detail = item.totalBytes > 0 ? String(format: "%.2f%%", item.progress * 100) : "—"
         location.detail = fileURL?.path ?? "—"
         error.detail = item.error ?? ""
         if connectionRows.count != connections.count {
@@ -131,16 +131,19 @@ final class FileDownloadDetailsViewController<VM: FileDownloadDetailsViewModel>:
         ])
         navigationItem.trailingItemGroups = [.fixedGroup(items: [share])]
         disposeBag.bind {
-            viewModel.$title.sink { [weak self] in self?.title = $0 }
+            viewModel.$title.sink { [weak self] _ in self?.title = $0 }
             Publishers.CombineLatest3(viewModel.$canResume, viewModel.$canPause, viewModel.$isComplete)
                 .receive(on: DispatchQueue.main).sink { [weak self] resume, pausable, complete in
                     guard let self else { return }
                     play.isEnabled = resume
                     pause.isEnabled = pausable
                     preview.isEnabled = complete
+                    if let action = share.menu?.children.first as? UIAction {
+                        action.attributes = complete ? [] : .disabled
+                    }
                     toolbarItems = [resume ? play : nil, pausable ? pause : nil, complete ? preview : nil, .flexibleSpace(), delete].compactMap { $0 }
                 }
-            viewModel.dismissSignal.sink { [weak self] in
+            viewModel.dismissSignal.sink { [weak self] _ in
                 guard let self else { return }
                 if !((splitViewController as? BaseSplitViewController)?.showEmptyDetail() ?? false) { pop(animated: true, sender: self) }
             }

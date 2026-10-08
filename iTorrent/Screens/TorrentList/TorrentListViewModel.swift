@@ -59,7 +59,7 @@ class TorrentListViewModel: BaseViewModel {
         super.init()
         title = "Pulled"
 
-        filterButtons = [%"common.all"] + TorrentHandle.State.filterArray.map { $0.name }
+        filterButtons = [%"common.all"] + TorrentHandle.State.filterArray.map { Self.filterTitle($0) }
 
 //        Task {
 //            try await Task.sleep(for: .seconds(0.1))
@@ -102,6 +102,15 @@ class TorrentListViewModel: BaseViewModel {
             }.assign(to: &$sections)
             $searchQuery.assign(to: &rssSearchViewModel.$searchQuery)
 //        }
+    }
+
+    static func filterTitle(_ state: TorrentHandle.State) -> String {
+        switch state {
+        case .storageError: return "Errors"
+        case .downloadingMetadata: return "Connecting"
+        case .paused: return "Paused / queued"
+        default: return state.name
+        }
     }
 
     static func searchFilter(_ text: String, by query: String) -> Bool {
@@ -194,7 +203,7 @@ extension TorrentListViewModel {
         let items = makeItems(Array(TorrentService.shared.torrents.values))
         let dictionary = Dictionary(grouping: items, by: \.listState)
         filterButtons = ["\(%"common.all")\(items.isEmpty ? "" : " (\(items.count))")"] + TorrentHandle.State.filterArray.map {
-            "\($0.name)\(dictionary[$0].map { " (\($0.count))" } ?? "")"
+            "\(Self.filterTitle($0))\(dictionary[$0].map { " (\($0.count))" } ?? "")"
         }
     }
 
@@ -238,7 +247,7 @@ private extension TorrentListViewModel {
     func makeGroupedSections(with torrents: [TorrentListItemViewModel], by sortingArray: [TorrentHandle.State]) -> [MvvmCollectionSectionModel] {
         let dictionary = [TorrentHandle.State: [TorrentListItemViewModel]](grouping: torrents, by: \.listState)
         return dictionary.sorted { Self.getStateGroupintIndex($0.key, from: sortingArray) < Self.getStateGroupintIndex($1.key, from: sortingArray) }.map { section in
-            MvvmCollectionSectionModel(id: section.key.name, header: section.key.name, style: .platformPlain, items: section.value)
+            MvvmCollectionSectionModel(id: section.key.name, header: Self.filterTitle(section.key), style: .platformPlain, items: section.value)
         }
     }
 }

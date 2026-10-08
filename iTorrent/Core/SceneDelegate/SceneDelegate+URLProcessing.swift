@@ -6,6 +6,7 @@
 //
 
 import LibTorrent
+import MvvmFoundation
 import UIKit
 
 extension SceneDelegate {
@@ -39,8 +40,7 @@ extension SceneDelegate {
             ?? (root as? UISplitViewController)?.viewControllers.first as? UINavigationController
         guard let selected else { navigation?.popToRootViewController(animated: true); return }
         let controller = FileDownloadDetailsViewModel.resolveVC(with: selected)
-        if let navigation { navigation.pushViewController(controller, animated: true) }
-        else { root.present(UINavigationController(rootViewController: controller), animated: true) }
+        window?.rootViewController?.navigate(to: controller, by: .detail(asRoot: true))
     }
 }
 

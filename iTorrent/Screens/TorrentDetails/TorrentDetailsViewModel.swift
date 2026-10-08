@@ -31,6 +31,7 @@ class TorrentDetailsViewModel: BaseCollectionViewModelWith<TorrentHandle>, @unch
         trackReload()
 
         disposeBag.bind {
+            DownloadQueue.shared.changed.sink { [weak self] _ in self?.dataUpdate() }
             torrentHandle.removePublisher.sink { [unowned self] _ in
                 dismissSignal.send()
             }
@@ -240,11 +241,12 @@ private extension TorrentDetailsViewModel {
         let friendlyState = snapshot.friendlyState
 
         isPaused = snapshot.isPaused
-        canResume = snapshot.canResume
-        canPause = snapshot.canPause
+        let queued = DownloadQueue.shared.isQueued(torrentHandle)
+        canResume = snapshot.canResume && !queued
+        canPause = snapshot.canPause || queued
         storageError = friendlyState == .storageError
 
-        stateModel.detail = friendlyState.name
+        stateModel.detail = queued ? "Queued" : friendlyState.name
 
         downloadModel.detail = "\(snapshot.downloadRate.bitrateToHumanReadable)/s"
         uploadModel.detail = "\(snapshot.uploadRate.bitrateToHumanReadable)/s"
