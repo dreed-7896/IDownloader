@@ -131,7 +131,7 @@ final class FileDownloadDetailsViewController<VM: FileDownloadDetailsViewModel>:
         ])
         navigationItem.trailingItemGroups = [.fixedGroup(items: [share])]
         disposeBag.bind {
-            viewModel.$title.sink { [weak self] _ in self?.title = $0 }
+            viewModel.$title.sink { [weak self] title in self?.title = title }
             Publishers.CombineLatest3(viewModel.$canResume, viewModel.$canPause, viewModel.$isComplete)
                 .receive(on: DispatchQueue.main).sink { [weak self] resume, pausable, complete in
                     guard let self else { return }
