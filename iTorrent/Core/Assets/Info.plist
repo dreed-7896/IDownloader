@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>IDownloader</string>
+	<string>Pulled</string>
 	<key>CFBundleDisplayName</key>
-	<string>IDownloader</string>
+	<string>Pulled</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.dreed7896.IDownloader.refresh</string>
@@ -46,6 +46,7 @@
 			<string>com.dreed7896.IDownloader.links</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>Pulled</string>
 				<string>IDownloader</string>
 			</array>
 		</dict>

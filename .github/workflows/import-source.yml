@@ -23,5 +23,5 @@ jobs:
           # Preserve our existing workflow files so the GitHub App token
           # does not need the special workflows permission.
           git restore --source=HEAD --staged --worktree -- .github
-          git commit -m "Import iTorrent source as independent IDownloader project"
+          git commit -m "Import iTorrent source as independent Pulled project"
           git push origin HEAD:main

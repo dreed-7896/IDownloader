@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D1A226992AEEEFCC00669D6D"
-               BuildableName = "IDownloader.app"
+               BuildableName = "Pulled.app"
                BlueprintName = "iTorrent"
                ReferencedContainer = "container:iTorrent.xcodeproj">
             </BuildableReference>
@@ -45,7 +45,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D1A226992AEEEFCC00669D6D"
-            BuildableName = "IDownloader.app"
+            BuildableName = "Pulled.app"
             BlueprintName = "iTorrent"
             ReferencedContainer = "container:iTorrent.xcodeproj">
          </BuildableReference>
@@ -74,7 +74,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D1A226992AEEEFCC00669D6D"
-            BuildableName = "IDownloader.app"
+            BuildableName = "Pulled.app"
             BlueprintName = "iTorrent"
             ReferencedContainer = "container:iTorrent.xcodeproj">
          </BuildableReference>

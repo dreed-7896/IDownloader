@@ -53,7 +53,7 @@
             </objects>
             <point key="canvasLocation" x="497" y="756"/>
         </scene>
-        <!--IDownloader-->
+        <!--Pulled-->
         <scene sceneID="IXq-Fm-zQi">
             <objects>
                 <viewController id="Y5r-dd-xf5" sceneMemberID="viewController">
@@ -87,7 +87,7 @@
                         <barButtonItem systemItem="flexibleSpace" id="XPR-wn-2OI"/>
                         <barButtonItem title="Item" image="gearshape.fill" catalog="system" id="qMc-KD-V1h"/>
                     </toolbarItems>
-                    <navigationItem key="navigationItem" title="IDownloader" largeTitleDisplayMode="always" id="bmc-yK-sej">
+                    <navigationItem key="navigationItem" title="Pulled" largeTitleDisplayMode="always" id="bmc-yK-sej">
                         <barButtonItem key="leftBarButtonItem" systemItem="edit" id="Pfp-Zv-tlg"/>
                         <rightBarButtonItems>
                             <barButtonItem image="ic_sort" id="f0u-aT-hV9"/>

@@ -1,6 +1,6 @@
 //
 //  SceneDelegate+URLProcessing.swift
-//  IDownloader
+//  Pulled
 //
 //  Created by Даниил Виноградов on 06.04.2024.
 //
@@ -11,12 +11,13 @@ import UIKit
 extension SceneDelegate {
     func processURL(_ url: URL) {
         Task {
-            if url.scheme?.lowercased() == "idownloader", url.host == "shared" {
+            if ["pulled", "idownloader"].contains(url.scheme?.lowercased() ?? ""), url.host == "shared" {
                 consumeSharedLinks()
                 return
             }
-            if url.absoluteString.hasPrefix("IDownloader:hash:file-"),
-               let id = UUID(uuidString: String(url.absoluteString.dropFirst("IDownloader:hash:file-".count))) {
+            let filePrefix = url.absoluteString.hasPrefix("IDownloader:hash:file-") ? "IDownloader:hash:file-" : "Pulled:hash:file-"
+            if url.absoluteString.hasPrefix(filePrefix),
+               let id = UUID(uuidString: String(url.absoluteString.dropFirst(filePrefix.count))) {
                 showFileDownloads(selected: id)
                 return
             }
@@ -24,7 +25,7 @@ extension SceneDelegate {
             if tryOpenAddTorrent(with: url) { return }
             if tryOpenAddMagnet(with: url) { return }
             if url.pathExtension.lowercased() == "torrent", await tryOpenRemoteAddTorrent(with: url) { return }
-            if FileDownloadService.shared.add(url) != nil { showFileDownloads() }
+            if let id = FileDownloadService.shared.add(url) { showFileDownloads(selected: id) }
         }
     }
 
@@ -36,24 +37,17 @@ extension SceneDelegate {
         guard let root = window?.rootViewController?.topPresented else { return }
         let navigation = root as? UINavigationController ?? root.navigationController
             ?? (root as? UISplitViewController)?.viewControllers.first as? UINavigationController
-        if let existing = navigation?.viewControllers.last as? FileDownloadsViewController {
-            existing.selectedDownload = selected
-            return
-        }
-        let controller = FileDownloadsViewController()
-        controller.selectedDownload = selected
+        guard let selected else { navigation?.popToRootViewController(animated: true); return }
+        let controller = FileDownloadDetailsViewModel.resolveVC(with: selected)
         if let navigation { navigation.pushViewController(controller, animated: true) }
-        else {
-            controller.showsCloseButton = true
-            root.present(UINavigationController(rootViewController: controller), animated: true)
-        }
+        else { root.present(UINavigationController(rootViewController: controller), animated: true) }
     }
 }
 
 private extension SceneDelegate {
     // Open torrent details by hash from Life Activity
     func tryOpenTorrentDetails(with url: URL) -> Bool {
-        let prefix = url.absoluteString.hasPrefix("iTorrent:hash:") ? "iTorrent:hash:" : "IDownloader:hash:"
+        let prefix = ["Pulled:hash:", "IDownloader:hash:", "iTorrent:hash:"].first { url.absoluteString.hasPrefix($0) } ?? "Pulled:hash:"
 
         guard url.absoluteString.hasPrefix(prefix) else { return false }
         let hash = url.absoluteString.replacingOccurrences(of: prefix, with: "")

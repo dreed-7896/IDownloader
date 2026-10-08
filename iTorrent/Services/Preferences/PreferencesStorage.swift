@@ -1,6 +1,6 @@
 //
 //  PreferencesStorage.swift
-//  IDownloader
+//  Pulled
 //
 //  Created by Daniil Vinogradov on 07/11/2023.
 //
@@ -167,12 +167,12 @@ extension Session.Settings {
         let preferences = PreferencesStorage.shared
 
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
-        settings.agentName = "IDownloader/\(appVersion)"
+        settings.agentName = "Pulled/\(appVersion)"
         settings.peerFingerprint = peerFingerprint(for: appVersion)
 
-        settings.maxActiveTorrents = preferences.maxActiveTorrents
-        settings.maxDownloadingTorrents = preferences.maxDownloadingTorrents
-        settings.maxUploadingTorrents = preferences.maxUploadingTorrents
+        settings.maxActiveTorrents = -1
+        settings.maxDownloadingTorrents = -1
+        settings.maxUploadingTorrents = -1
 
         settings.maxUploadSpeed = preferences.maxUploadSpeed
         settings.maxDownloadSpeed = preferences.maxDownloadSpeed

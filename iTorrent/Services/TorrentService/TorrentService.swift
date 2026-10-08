@@ -1,6 +1,6 @@
 //
 //  TorrentService.swift
-//  IDownloader
+//  Pulled
 //
 //  Created by Daniil Vinogradov on 29/10/2023.
 //
@@ -109,6 +109,7 @@ extension TorrentService: SessionDelegate {
     func torrentManager(_ manager: Session, didAddTorrent torrent: TorrentHandle) {
         torrent.prepareToAdd(into: self)
         torrents[torrent.snapshot.infoHashes] = torrent
+        DownloadQueue.shared.enqueue(torrent)
 
         // Add trackers from torrent list service if needed
         if preferences.isTrackersAutoaddingEnabled, !torrent.isPrivate {

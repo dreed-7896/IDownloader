@@ -273,7 +273,7 @@
 		D1FFC9652C38136600233C2F /* URL+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1FFC9642C38135F00233C2F /* URL+Extensions.swift */; };
 		D1FFC96C2C382FC900233C2F /* StorageModel+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1FFC96B2C382FBE00233C2F /* StorageModel+Extensions.swift */; };
 		D0F11E00202610080000000B /* FileDownloadService.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000001 /* FileDownloadService.swift */; };
-		D0F11E00202610080000000C /* FileDownloadsViewController.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000002 /* FileDownloadsViewController.swift */; };
+		D0F11E00202610080000000C /* FileDownloadDetails.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000002 /* FileDownloadDetails.swift */; };
 		D0F11E00202610080000000D /* SharedDownloadInbox.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000003 /* SharedDownloadInbox.swift */; };
 		D0F11E00202610080000000E /* ShareViewController.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000004 /* ShareViewController.swift */; };
 		D0F11E00202610080000000F /* SharedDownloadInbox.swift in Share Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000003; };
@@ -567,7 +567,7 @@
 		D1FFC9642C38135F00233C2F /* URL+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URL+Extensions.swift"; sourceTree = "<group>"; };
 		D1FFC96B2C382FBE00233C2F /* StorageModel+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StorageModel+Extensions.swift"; sourceTree = "<group>"; };
 		D0F11E002026100800000001 /* FileDownloadService.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iTorrent/Services/FileDownloadService/FileDownloadService.swift"; sourceTree = SOURCE_ROOT; };
-		D0F11E002026100800000002 /* FileDownloadsViewController.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iTorrent/Screens/FileDownloads/FileDownloadsViewController.swift"; sourceTree = SOURCE_ROOT; };
+		D0F11E002026100800000002 /* FileDownloadDetails.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iTorrent/Screens/FileDownloads/FileDownloadDetails.swift"; sourceTree = SOURCE_ROOT; };
 		D0F11E002026100800000003 /* SharedDownloadInbox.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/SharedDownloadInbox.swift"; sourceTree = SOURCE_ROOT; };
 		D0F11E002026100800000004 /* ShareViewController.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShareExtension/ShareViewController.swift"; sourceTree = SOURCE_ROOT; };
 		D0F11E002026100800000005 /* Info.plist */ = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "ShareExtension/Info.plist"; sourceTree = SOURCE_ROOT; };
@@ -1344,7 +1344,7 @@
 			isa = PBXGroup;
 			children = (
 				D0F11E002026100800000001 /* FileDownloadService.swift */,
-				D0F11E002026100800000002 /* FileDownloadsViewController.swift */,
+				D0F11E002026100800000002 /* FileDownloadDetails.swift */,
 				D0F11E002026100800000003 /* SharedDownloadInbox.swift */,
 				D0F11E002026100800000004 /* ShareViewController.swift */,
 				D0F11E002026100800000005 /* Info.plist */,
@@ -1908,7 +1908,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D0F11E00202610080000000B /* FileDownloadService.swift in Sources */,
-				D0F11E00202610080000000C /* FileDownloadsViewController.swift in Sources */,
+				D0F11E00202610080000000C /* FileDownloadDetails.swift in Sources */,
 				D0F11E00202610080000000D /* SharedDownloadInbox.swift in Sources */,
 				7C9A11012F0A000100C0DE02 /* TorrentMigration.swift in Sources */,
 				7CF6DA352C0F3DB90033D03F /* BCHostingConfiguration.swift in Sources */,
@@ -2253,11 +2253,11 @@
 				DEVELOPMENT_TEAM = D59DHVRS87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iTorrent/Core/Assets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = IDownloader;
-				INFOPLIST_KEY_CFBundleName = IDownloader;
+				INFOPLIST_KEY_CFBundleDisplayName = Pulled;
+				INFOPLIST_KEY_CFBundleName = Pulled;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "IDownloader uses the local network to discover playback devices and cast video on your network.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Pulled uses the local network to discover playback devices and cast video on your network.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -2273,7 +2273,7 @@
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(APPLICATION_ID)";
 				PRODUCT_MODULE_NAME = iTorrent;
-				PRODUCT_NAME = IDownloader;
+				PRODUCT_NAME = Pulled;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
 				SUPPORTS_MACCATALYST = YES;
@@ -2405,11 +2405,11 @@
 				"DEVELOPMENT_TEAM[sdk=xros*]" = D59DHVRS87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iTorrent/Core/Assets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = IDownloader;
-				INFOPLIST_KEY_CFBundleName = IDownloader;
+				INFOPLIST_KEY_CFBundleDisplayName = Pulled;
+				INFOPLIST_KEY_CFBundleName = Pulled;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "IDownloader uses the local network to discover playback devices and cast video on your network.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Pulled uses the local network to discover playback devices and cast video on your network.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -2425,7 +2425,7 @@
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(APPLICATION_ID)";
 				PRODUCT_MODULE_NAME = iTorrent;
-				PRODUCT_NAME = IDownloader;
+				PRODUCT_NAME = Pulled;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "iTorrent Prod";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=xros*]" = "iTorrent2 Distrib";
@@ -2657,11 +2657,11 @@
 				DEVELOPMENT_TEAM = D59DHVRS87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iTorrent/Core/Assets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = IDownloader;
-				INFOPLIST_KEY_CFBundleName = IDownloader;
+				INFOPLIST_KEY_CFBundleDisplayName = Pulled;
+				INFOPLIST_KEY_CFBundleName = Pulled;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "IDownloader uses the local network to discover playback devices and cast video on your network.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Pulled uses the local network to discover playback devices and cast video on your network.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -2677,7 +2677,7 @@
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(APPLICATION_ID)";
 				PRODUCT_MODULE_NAME = iTorrent;
-				PRODUCT_NAME = IDownloader;
+				PRODUCT_NAME = Pulled;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
 				SUPPORTS_MACCATALYST = YES;

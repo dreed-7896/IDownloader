@@ -1,10 +1,11 @@
 import Combine
 import Foundation
+import LibTorrent
 import UIKit
 import UserNotifications
 
 struct FileDownload: Codable, Identifiable {
-    enum State: String, Codable { case preparing, downloading, paused, assembling, completed, failed }
+    enum State: String, Codable { case queued, preparing, downloading, paused, assembling, completed, failed }
     var id = UUID()
     var url: URL
     var name: String
@@ -21,6 +22,27 @@ struct FileDownload: Codable, Identifiable {
     var createdAt = Date()
     var progress: Double { totalBytes > 0 ? min(1, Double(receivedBytes) / Double(totalBytes)) : 0 }
     var isActive: Bool { [.preparing, .downloading, .assembling].contains(state) }
+    var queueEligible: Bool { isActive || state == .queued }
+    var listState: TorrentHandle.State {
+        switch state {
+        case .completed: return .finished
+        case .paused, .queued: return .paused
+        case .failed: return .storageError
+        case .preparing: return .downloadingMetadata
+        case .downloading, .assembling: return .downloading
+        }
+    }
+    var stateTitle: String {
+        switch state {
+        case .queued: return "Queued"
+        case .preparing: return "Connecting"
+        case .downloading: return "Downloading"
+        case .paused: return "Paused"
+        case .assembling: return "Assembling"
+        case .completed: return "Done"
+        case .failed: return "Failed"
+        }
+    }
     var activityID: String { "file-\(id.uuidString)" }
     var timeRemaining: String {
         guard speed > 0, totalBytes > receivedBytes else { return "—" }
@@ -45,7 +67,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
     private var assembling = Set<UUID>()
     private var pendingAssemblies = 0
     private var backgroundEventsFinished = false
-    private let ioQueue = DispatchQueue(label: "IDownloader.files.assembly", qos: .utility)
+    private let ioQueue = DispatchQueue(label: "Pulled.files.assembly", qos: .utility)
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
         config.isDiscretionary = false
@@ -65,7 +87,11 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
         super.init()
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         if let data = try? Data(contentsOf: manifest), let saved = try? JSONDecoder().decode([FileDownload].self, from: data) {
-            downloads = saved
+            downloads = saved.map { item in
+                var item = item
+                if [.preparing, .downloading].contains(item.state) { item.state = .queued; item.speed = 0 }
+                return item
+            }
         }
         session.getAllTasks { [weak self] existing in
             DispatchQueue.main.async {
@@ -76,16 +102,17 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
                     else { task.cancel(); continue }
                     self.tasks[task.taskIdentifier] = task
                     self.bytes[task.taskIdentifier] = task.countOfBytesReceived
-                    if item.state == .paused { task.suspend() } else { task.resume() }
+                    if item.state == .paused || item.state == .queued { task.suspend() } else { task.resume() }
                 }
                 self.restoring = false
-                for item in self.downloads where item.isActive {
+                for item in self.downloads where item.queueEligible {
                     if item.completedParts.count == item.parts, !item.completedParts.isEmpty {
                         self.assemble(item.id)
                     } else if !self.tasks.values.contains(where: { Tag($0)?.id == item.id }) {
-                        self.restart(item.id)
+                        self.downloads[self.index(item.id)!].state = .queued
                     }
                 }
+                DownloadQueue.shared.schedule()
             }
         }
     }
@@ -93,17 +120,17 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
     @discardableResult
     func add(_ url: URL) -> UUID? {
         guard ["http", "https"].contains(url.scheme?.lowercased()), url.host != nil else { return nil }
-        if let existing = downloads.first(where: { $0.url == url && ($0.isActive || $0.state == .paused) }) { return existing.id }
+        if let existing = downloads.first(where: { $0.url == url && ($0.queueEligible || $0.state == .paused) }) { return existing.id }
         let item = FileDownload(url: url, name: url.lastPathComponent.isEmpty ? "Download" : url.lastPathComponent,
-                                requestedParts: min(16, max(1, PreferencesStorage.shared.fileDownloadParts)))
+                                state: .queued, requestedParts: min(16, max(1, PreferencesStorage.shared.fileDownloadParts)))
         downloads.insert(item, at: 0)
         publish(item.id)
-        if !restoring { start(item.id) }
+        DownloadQueue.shared.schedule()
         return item.id
     }
 
     func pause(_ id: UUID) {
-        guard let index = index(id), [.preparing, .downloading].contains(downloads[index].state) else { return }
+        guard let index = index(id), [.queued, .preparing, .downloading].contains(downloads[index].state) else { return }
         downloads[index].state = .paused
         downloads[index].speed = 0
         tasks.values.filter { Tag($0)?.id == id }.forEach { $0.suspend() }
@@ -112,19 +139,56 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
 
     func resume(_ id: UUID) {
         guard let index = index(id), [.paused, .failed].contains(downloads[index].state) else { return }
-        let active = tasks.values.filter { Tag($0)?.id == id }
-        if active.isEmpty { restart(id); return }
-        downloads[index].state = .downloading
+        downloads[index].state = .queued
         downloads[index].error = nil
-        samples[id] = nil
-        active.forEach { $0.resume() }
         publish(id)
+        DownloadQueue.shared.schedule()
     }
 
-    func remove(_ id: UUID) {
+    func setQueueAllowed(_ id: UUID, _ allowed: Bool) {
+        guard !restoring, let index = index(id) else { return }
+        if !allowed, [.preparing, .downloading].contains(downloads[index].state) {
+            downloads[index].state = .queued
+            downloads[index].speed = 0
+            tasks.values.filter { Tag($0)?.id == id }.forEach { $0.suspend() }
+            samples[id] = nil
+            publish(id)
+        } else if allowed, downloads[index].state == .queued {
+            let active = tasks.values.filter { Tag($0)?.id == id }
+            if active.isEmpty { restart(id); return }
+            downloads[index].state = .downloading
+            samples[id] = nil
+            active.forEach { $0.resume() }
+            publish(id)
+        }
+    }
+
+    struct Connection {
+        let number: Int
+        let received: Int64
+        let total: Int64
+        var progress: Double { total > 0 ? min(1, max(0, Double(received) / Double(total))) : 0 }
+    }
+
+    func connections(_ id: UUID) -> [Connection] {
+        guard let item = downloads.first(where: { $0.id == id }) else { return [] }
+        let chunk = item.totalBytes / Int64(max(1, item.parts))
+        return (0..<item.parts).map { part in
+            let length = part == item.parts - 1 ? item.totalBytes - Int64(part) * chunk : chunk
+            let task = tasks.values.first { task in
+                guard let tag = Tag(task), tag.id == id else { return false }
+                return max(0, tag.part) == part
+            }
+            let received = item.state == .completed || item.state == .assembling || item.completedParts.contains(part)
+                ? length : task.map { bytes[$0.taskIdentifier] ?? $0.countOfBytesReceived } ?? 0
+            return Connection(number: part + 1, received: received, total: length)
+        }
+    }
+
+    func remove(_ id: UUID, deleteFiles: Bool = true) {
         cancelTasks(id)
         try? FileManager.default.removeItem(at: directory(id))
-        if let file = fileURL(id) { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+        if deleteFiles, let file = fileURL(id) { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
         if let index = index(id) {
             downloads[index].state = .failed
             updates.send(downloads[index])
@@ -184,7 +248,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
         let task = session.downloadTask(with: request)
         task.taskDescription = "\(item.id.uuidString)|\(item.generation.uuidString)|\(part)|\(start)|\(end)"
         tasks[task.taskIdentifier] = task
-        if item.state != .paused { task.resume() }
+        if item.state != .paused && item.state != .queued { task.resume() }
     }
 
     private func cancelTasks(_ id: UUID) {
@@ -198,6 +262,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
 
     private func restart(_ id: UUID, single: Bool = false) {
         guard let index = index(id) else { return }
+        let previousState = downloads[index].state
         // Invalidate callbacks from cancelled tasks before scheduling replacements.
         downloads[index].generation = UUID()
         cancelTasks(id)
@@ -214,6 +279,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
         if restoring {
             publish(id)
         } else if single {
+            if previousState == .paused || previousState == .queued { downloads[index].state = previousState }
             publish(id)
             createTask(downloads[index], part: -2, start: 0, end: 0)
         } else { start(id) }
@@ -276,12 +342,12 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
         }
         for task in tasks.values where Tag(task)?.id == tag.id { received += bytes[task.taskIdentifier] ?? 0 }
         downloads[index].receivedBytes = received
-        if downloads[index].state != .paused { downloads[index].state = .downloading }
+        if downloads[index].state != .paused && downloads[index].state != .queued { downloads[index].state = .downloading }
         let now = Date()
         if let previous = samples[tag.id] {
             let elapsed = now.timeIntervalSince(previous.0)
             if elapsed >= 1 {
-                downloads[index].speed = downloads[index].state == .paused ? 0 : UInt64(max(0, Double(received - previous.1) / elapsed))
+                downloads[index].speed = (downloads[index].state == .paused || downloads[index].state == .queued) ? 0 : UInt64(max(0, Double(received - previous.1) / elapsed))
                 samples[tag.id] = (now, received)
                 publish(tag.id, persist: false)
             }
@@ -308,7 +374,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
             let etag = response.value(forHTTPHeaderField: "ETag")
             downloads[index].validator = etag.flatMap { $0.hasPrefix("W/") ? nil : $0 } ?? response.value(forHTTPHeaderField: "Last-Modified")
             downloads[index].parts = Int(min(Int64(item.requestedParts), range.2))
-            if item.state != .paused { downloads[index].state = .downloading }
+            if item.state != .paused && item.state != .queued { downloads[index].state = .downloading }
             publish(tag.id)
             let updated = downloads[index]
             let chunk = range.2 / Int64(updated.parts)
@@ -342,6 +408,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
             if FileManager.default.fileExists(atPath: target.path) { try FileManager.default.removeItem(at: target) }
             try FileManager.default.moveItem(at: location, to: target)
             if !downloads[index].completedParts.contains(part) { downloads[index].completedParts.append(part) }
+            downloads[index].receivedBytes = connections(tag.id).reduce(0) { $0 + $1.received }
             publish(tag.id)
             if downloads[index].completedParts.count == downloads[index].parts { assemble(tag.id) }
         } catch { fail(tag.id, error.localizedDescription) }
@@ -420,4 +487,134 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
         backgroundCompletion = nil
         completion?()
     }
+}
+
+/// One FIFO queue for both engines. A multipart file consumes one transfer slot.
+final class DownloadQueue {
+    static let shared = DownloadQueue()
+    let changed = PassthroughSubject<Void, Never>()
+    private var subscriptions = Set<AnyCancellable>()
+    private var requested = Set(UserDefaults.standard.stringArray(forKey: "downloadQueueRequestedTorrents") ?? [])
+    private var manuallyPaused = Set<String>()
+    private var running = Set<String>()
+    private var pending = false
+    private var applying = false
+    private var lastCommands: [String: (Bool, Date)] = [:]
+
+    private init() {
+        TorrentService.shared.updateNotifier.sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
+        TorrentService.shared.$torrents.sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
+        FileDownloadService.shared.updates.sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
+        PreferencesStorage.shared.settingsUpdatePublisher.receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
+        Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+            .sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
+        schedule()
+    }
+
+    func enqueue(_ handle: TorrentHandle) {
+        let key = handle.snapshot.infoHashes.best.hex
+        manuallyPaused.remove(key)
+        requested.insert(key)
+        handle.clearError()
+        save()
+        schedule()
+    }
+
+    func pause(_ handle: TorrentHandle) {
+        let key = handle.snapshot.infoHashes.best.hex
+        manuallyPaused.insert(key)
+        requested.remove(key)
+        running.remove(key)
+        handle.pause()
+        save()
+        changed.send()
+        schedule()
+    }
+
+    func isQueued(_ handle: TorrentHandle) -> Bool {
+        let key = handle.snapshot.infoHashes.best.hex
+        return requested.contains(key) && !running.contains(key) && handle.snapshot.friendlyState != .storageError
+    }
+
+    func schedule() {
+        guard !pending else { return }
+        pending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.pending = false
+            self.apply()
+        }
+    }
+
+    private func save() {
+        let saved = Set(UserDefaults.standard.stringArray(forKey: "downloadQueueRequestedTorrents") ?? [])
+        if saved != requested { UserDefaults.standard.set(Array(requested), forKey: "downloadQueueRequestedTorrents") }
+    }
+
+    private func apply() {
+        guard !applying else { return }
+        applying = true
+        defer { applying = false }
+        let service = TorrentService.shared
+        let files = FileDownloadService.shared
+        let handles = Array(service.torrents.values).filter { $0.snapshot.isValid }
+        let existing = Set(handles.map { $0.snapshot.infoHashes.best.hex })
+        requested.formIntersection(existing)
+        for handle in handles where !handle.snapshot.isPaused && !manuallyPaused.contains(handle.snapshot.infoHashes.best.hex) {
+            requested.insert(handle.snapshot.infoHashes.best.hex)
+        }
+        struct Entry {
+            let key: String
+            let date: Date
+            let torrent: TorrentHandle?
+            let file: UUID?
+            let isSeed: Bool
+        }
+        var entries = handles.filter { requested.contains($0.snapshot.infoHashes.best.hex) && $0.snapshot.friendlyState != .storageError }.map {
+            Entry(key: $0.snapshot.infoHashes.best.hex, date: $0.metadata.dateAdded, torrent: $0, file: nil,
+                  isSeed: $0.snapshot.progress >= 1)
+        }
+        entries += files.downloads.filter { $0.queueEligible && $0.state != .assembling }.map {
+            Entry(key: $0.activityID, date: $0.createdAt, torrent: nil, file: $0.id, isSeed: false)
+        }
+        entries.sort {
+            if $0.isSeed != $1.isSeed { return !$0.isSeed }
+            return $0.date == $1.date ? $0.key < $1.key : $0.date < $1.date
+        }
+        let preferences = PreferencesStorage.shared
+        func limit(_ value: Int) -> Int { value <= 0 ? Int.max : value }
+        var active = 0, downloading = 0, seeding = 0
+        var selected = Set<String>()
+        for entry in entries {
+            guard active < limit(preferences.maxActiveTorrents),
+                  entry.isSeed ? seeding < limit(preferences.maxUploadingTorrents) : downloading < limit(preferences.maxDownloadingTorrents)
+            else { continue }
+            selected.insert(entry.key)
+            active += 1
+            if entry.isSeed { seeding += 1 } else { downloading += 1 }
+        }
+        let old = running
+        running = selected
+        // Suspend outgoing transfers before starting replacements.
+        for allowed in [false, true] {
+            for entry in entries where selected.contains(entry.key) == allowed {
+                if let handle = entry.torrent {
+                    let needsCommand = handle.snapshot.isPaused == allowed
+                    let last = lastCommands[entry.key]
+                    if needsCommand && (last == nil || last!.0 != allowed || Date().timeIntervalSince(last!.1) >= 1) {
+                        if allowed { handle.resume() } else { handle.pause() }
+                        lastCommands[entry.key] = (allowed, Date())
+                    }
+                } else if let id = entry.file { files.setQueueAllowed(id, allowed) }
+            }
+        }
+        save()
+        if old != running { changed.send() }
+    }
+}
+
+extension TorrentHandle {
+    func resumeDownload() { DownloadQueue.shared.enqueue(self) }
+    func pauseDownload() { DownloadQueue.shared.pause(self) }
 }

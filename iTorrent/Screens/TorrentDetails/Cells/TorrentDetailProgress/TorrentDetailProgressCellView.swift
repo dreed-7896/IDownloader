@@ -1,6 +1,6 @@
 //
 //  TorrentDetailProgressCellView.swift
-//  IDownloader
+//  Pulled
 //
 //  Created by Daniil Vinogradov on 31/10/2023.
 //
@@ -21,9 +21,13 @@ struct TorrentDetailProgressCellView: MvvmSwiftUICellProtocol {
 //                    .foregroundStyle(Color(PreferencesStorage.shared.tintColor))
                     .foregroundStyle(Color(.secondaryAccent))
                     .multilineTextAlignment(.trailing)
-                SegmentedProgressView(progress: $viewModel.segmentedProgress)
-                    .frame(height: 4)
-                    .clipShape(Capsule())
+                if viewModel.showsConnections {
+                    ConnectionProgressStrip(progress: viewModel.segmentedProgress)
+                } else {
+                    SegmentedProgressView(progress: $viewModel.segmentedProgress)
+                        .frame(height: 4)
+                        .clipShape(Capsule())
+                }
             }
         }
         .systemMinimumHeight()

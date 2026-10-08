@@ -1,6 +1,6 @@
 //
 //  TorrentListViewModel.swift
-//  IDownloader
+//  Pulled
 //
 //  Created by Daniil Vinogradov on 29/10/2023.
 //
@@ -26,6 +26,7 @@ extension TorrentListViewModel {
 }
 
 class TorrentListViewModel: BaseViewModel {
+    private var itemCache: [String: TorrentListItemViewModel] = [:]
     @Published var sections: [MvvmCollectionSectionModel] = []
     @Published var searchPresented: Bool = false
     @Published var searchQuery: String = ""
@@ -56,7 +57,7 @@ class TorrentListViewModel: BaseViewModel {
 
     required init() {
         super.init()
-        title = "IDownloader"
+        title = "Pulled"
 
         filterButtons = [%"common.all"] + TorrentHandle.State.filterArray.map { $0.name }
 
@@ -64,7 +65,11 @@ class TorrentListViewModel: BaseViewModel {
 //            try await Task.sleep(for: .seconds(0.1))
 
             let groupsSortingArray = PreferencesStorage.shared.$torrentListGroupsSortingArray
-            let torrentSectionChanged = TorrentService.shared.updateNotifier.filter { $0.oldSnapshot.friendlyState != $0.handle?.snapshot.friendlyState }.map{_ in ()}.prepend([()])
+            let fileChanges = FileDownloadService.shared.$downloads
+                .map { $0.map { "\($0.id)|\($0.name)|\($0.state.rawValue)|\($0.totalBytes)" } }
+                .removeDuplicates().map { _ in () }
+            let torrentSectionChanged = TorrentService.shared.updateNotifier.filter { $0.oldSnapshot.friendlyState != $0.handle?.snapshot.friendlyState }.map { _ in () }
+                .merge(with: fileChanges, DownloadQueue.shared.changed).prepend(())
 
             disposeBag.bind {
                 rssFeedProvider.hasNewsPublisher.sink { [unowned self] value in
@@ -83,13 +88,11 @@ class TorrentListViewModel: BaseViewModel {
                 groupsSortingArray,
                 $filter
             ) { _, torrentHandles, searchQuery, searchPresented, sortingType, sortingReverced, isGrouping, sortingArray, filter in
-                var torrentHandles = torrentHandles
-                if !searchQuery.isEmpty {
-                    torrentHandles = torrentHandles.filter { Self.searchFilter($0.snapshot.name, by: searchQuery) }
-                }
-                return (torrentHandles.sorted(by: sortingType, reverced: sortingReverced), isGrouping, sortingArray, filter, searchPresented)
+                return (torrentHandles, searchQuery, isGrouping, sortingArray, filter, searchPresented, sortingType, sortingReverced)
             }
-            .map { [unowned self] torrents, isGrouping, sortingArray, filter, searchPresented in
+            .receive(on: DispatchQueue.main)
+            .map { [unowned self] handles, query, isGrouping, sortingArray, filter, searchPresented, type, reversed in
+                let torrents = makeItems(handles).filter { query.isEmpty || Self.searchFilter($0.title, by: query) }.sorted(by: type, reverced: reversed)
                 if isGrouping {
                     return makeGroupedSections(with: torrents, by: sortingArray)
                 } else {
@@ -135,14 +138,14 @@ extension TorrentListViewModel {
     func resumeAllSelected(at indexPaths: [IndexPath]) {
         let torrentModels = indexPaths.compactMap { sections[$0.section].items[$0.item] as? TorrentListItemViewModel }
         torrentModels.forEach { 
-            guard $0.torrentHandle.snapshot.canResume else { return }
-            $0.torrentHandle.resume()
+            guard $0.canResume else { return }
+            $0.resume()
         }
     }
 
     func pauseAllSelected(at indexPaths: [IndexPath]) {
         let torrentModels = indexPaths.compactMap { sections[$0.section].items[$0.item] as? TorrentListItemViewModel }
-        torrentModels.forEach { $0.torrentHandle.pause() }
+        torrentModels.forEach { $0.pause() }
     }
 
     func rehashAllSelected(at indexPaths: [IndexPath]) {
@@ -151,24 +154,24 @@ extension TorrentListViewModel {
         alert(title: %"details.rehash.title", message: %"details.rehash.message", actions: [
             .init(title: %"common.cancel", style: .cancel),
             .init(title: %"details.rehash.action", style: .destructive, isPrimary: true, action: {
-                torrentModels.forEach { $0.torrentHandle.rehash() }
+                torrentModels.filter { !$0.isFile }.forEach { $0.torrentHandle.rehash() }
             })
         ])
     }
 
     func deleteAllSelected(at indexPaths: [IndexPath]) {
         let torrentModels = indexPaths.compactMap { sections[$0.section].items[$0.item] as? TorrentListItemViewModel }
-        let message = torrentModels.map { $0.torrentHandle.snapshot.name }.joined(separator: "\n\n")
+        let message = torrentModels.map { $0.title }.joined(separator: "\n\n")
 
         alert(title: %"torrent.remove.title", message: message, actions: [
             .init(title: %"torrent.remove.action.dropData", style: .destructive, action: {
                 torrentModels.forEach { torrentModel in
-                    TorrentService.shared.removeTorrent(by: torrentModel.torrentHandle.snapshot.infoHashes, deleteFiles: true)
+                    torrentModel.delete(deleteFiles: true)
                 }
             }),
             .init(title: %"torrent.remove.action.keepData", style: .default, action: {
                 torrentModels.forEach { torrentModel in
-                    TorrentService.shared.removeTorrent(by: torrentModel.torrentHandle.snapshot.infoHashes, deleteFiles: false)
+                    torrentModel.delete(deleteFiles: false)
                 }
             }),
             .init(title: %"common.cancel", style: .cancel, isPrimary: true)
@@ -188,22 +191,41 @@ extension TorrentListViewModel {
     }
 
     func updateFilterNames() {
-        let dictionary = [TorrentHandle.State: [TorrentHandle]](grouping: TorrentService.shared.torrents.values, by: \.snapshot.friendlyState)
-
-        let allCount = TorrentService.shared.torrents.values.count
-        filterButtons = ["\(%"common.all")\(allCount > 0 ? " (\(TorrentService.shared.torrents.values.count))" : "")"] + TorrentHandle.State.filterArray.map { "\($0.name)\(dictionary[$0].map { " (\($0.count))" } ?? "")" }
+        let items = makeItems(Array(TorrentService.shared.torrents.values))
+        let dictionary = Dictionary(grouping: items, by: \.listState)
+        filterButtons = ["\(%"common.all")\(items.isEmpty ? "" : " (\(items.count))")"] + TorrentHandle.State.filterArray.map {
+            "\($0.name)\(dictionary[$0].map { " (\($0.count))" } ?? "")"
+        }
     }
+
+    private func makeItems(_ handles: [TorrentHandle]) -> [TorrentListItemViewModel] {
+        var items: [TorrentListItemViewModel] = []
+        for handle in handles where handle.snapshot.isValid {
+            let key = handle.snapshot.infoHashes.best.hex
+            let vm = itemCache[key] ?? TorrentListItemViewModel(with: handle)
+            vm.setNavigationService { [weak self] in self?.navigationService?() }
+            itemCache[key] = vm
+            items.append(vm)
+        }
+        for file in FileDownloadService.shared.downloads {
+            let key = file.id.uuidString
+            let vm = itemCache[key] ?? TorrentListItemViewModel(fileID: file.id)
+            vm.setNavigationService { [weak self] in self?.navigationService?() }
+            itemCache[key] = vm
+            items.append(vm)
+        }
+        let keys = Set(items.map(\.id))
+        itemCache = itemCache.filter { keys.contains($0.key) }
+        return items
+    }
+
 }
 
 private extension TorrentListViewModel {
-    func makeUngroupedSection(with torrents: [TorrentHandle], filter: TorrentHandle.State?, searchPresented: Bool) -> [MvvmCollectionSectionModel] {
+    func makeUngroupedSection(with torrents: [TorrentListItemViewModel], filter: TorrentHandle.State?, searchPresented: Bool) -> [MvvmCollectionSectionModel] {
         [.init(id: "torrents", style: .platformPlain, showsSeparators: true, items: torrents.filter { torrent in
             guard filter != nil && !searchPresented else { return true }
-            return torrent.snapshot.friendlyState == filter
-        }.map {
-            let vm = TorrentListItemViewModel(with: $0)
-            vm.setNavigationService { [weak self] in self?.navigationService?() }
-            return vm
+            return torrent.listState == filter
         })]
     }
 
@@ -213,30 +235,26 @@ private extension TorrentListViewModel {
         return index ?? -1
     }
 
-    func makeGroupedSections(with torrents: [TorrentHandle], by sortingArray: [TorrentHandle.State]) -> [MvvmCollectionSectionModel] {
-        let dictionary = [TorrentHandle.State: [TorrentHandle]](grouping: torrents, by: \.snapshot.friendlyState)
+    func makeGroupedSections(with torrents: [TorrentListItemViewModel], by sortingArray: [TorrentHandle.State]) -> [MvvmCollectionSectionModel] {
+        let dictionary = [TorrentHandle.State: [TorrentListItemViewModel]](grouping: torrents, by: \.listState)
         return dictionary.sorted { Self.getStateGroupintIndex($0.key, from: sortingArray) < Self.getStateGroupintIndex($1.key, from: sortingArray) }.map { section in
-            MvvmCollectionSectionModel(id: section.key.name, header: section.key.name, style: .platformPlain, items: section.value.map {
-                let vm = TorrentListItemViewModel(with: $0)
-                vm.setNavigationService { [weak self] in self?.navigationService?() }
-                return vm
-            })
+            MvvmCollectionSectionModel(id: section.key.name, header: section.key.name, style: .platformPlain, items: section.value)
         }
     }
 }
 
-private extension Array where Element == TorrentHandle {
+private extension Array where Element == TorrentListItemViewModel {
     func sorted(by type: TorrentListViewModel.Sort, reverced: Bool) -> [Element] {
-        let res = filter(\.snapshot.isValid).sorted { first, second in
+        let res = sorted { first, second in
             switch type {
             case .alphabetically:
-                return first.snapshot.name.localizedCaseInsensitiveCompare(second.snapshot.name) == .orderedAscending
+                return first.title.localizedCaseInsensitiveCompare(second.title) == .orderedAscending
             case .creationDate:
-                return first.snapshot.creationDate ?? Date() > second.snapshot.creationDate ?? Date()
+                return first.creationDate > second.creationDate
             case .addedDate:
-                return first.metadata.dateAdded > second.metadata.dateAdded
+                return first.addedDate > second.addedDate
             case .size:
-                return first.snapshot.totalWanted > second.snapshot.totalWanted
+                return first.size > second.size
             }
         }
 

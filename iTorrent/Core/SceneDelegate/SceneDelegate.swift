@@ -1,6 +1,6 @@
 //
 //  SceneDelegate.swift
-//  IDownloader
+//  Pulled
 //
 //  Created by Daniil Vinogradov on 29/10/2023.
 //
@@ -30,6 +30,7 @@ class SceneDelegate: MvvmSceneDelegate {
         container.registerDaemon(factory: RssFeedProvider.init)
         container.registerDaemon(factory: WebServerService.init)
         container.registerDaemon(factory: LiveActivityService.init)
+        _ = DownloadQueue.shared
         container.registerDaemon(factory: IntentsService.init)
         container.registerDaemon(factory: AdsManager.init)
         container.registerDaemon(factory: CellularNotAllowedOverlay.init)
@@ -59,6 +60,7 @@ class SceneDelegate: MvvmSceneDelegate {
 
         router.register(TorrentListViewController<TorrentListViewModel>.self)
         router.register(TorrentDetailsViewController<TorrentDetailsViewModel>.self)
+        router.register(FileDownloadDetailsViewController<FileDownloadDetailsViewModel>.self)
         router.register(TorrentFilesViewController<TorrentFilesViewModel>.self)
         router.register(TorrentAddViewController<TorrentAddViewModel>.self)
         router.register(TorrentTrackersViewController<TorrentTrackersViewModel>.self)

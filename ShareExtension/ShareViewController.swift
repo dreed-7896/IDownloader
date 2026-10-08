@@ -12,7 +12,7 @@ final class ShareViewController: UIViewController {
         view.backgroundColor = .systemBackground
         preferredContentSize = CGSize(width: 420, height: 260)
         let title = UILabel()
-        title.text = "IDownloader"
+        title.text = "Pulled"
         title.font = .preferredFont(forTextStyle: .title2)
         statusLabel.numberOfLines = 5
         statusLabel.font = .preferredFont(forTextStyle: .body)
@@ -72,12 +72,12 @@ final class ShareViewController: UIViewController {
         do {
             try SharedDownloadInbox.enqueue(urls)
             // The inbox survives extension termination and denied URL handoffs.
-            extensionContext?.open(URL(string: "IDownloader://shared")!) { [weak self] opened in
+            extensionContext?.open(URL(string: "Pulled://shared")!) { [weak self] opened in
                 DispatchQueue.main.async {
                     guard let self else { return }
                     if opened { self.done() }
                     else {
-                        self.statusLabel.text = "Added to IDownloader. Open IDownloader to start your download."
+                        self.statusLabel.text = "Added to Pulled. Open Pulled to start your download."
                         if let stack = self.addButton.superview as? UIStackView,
                            let close = stack.arrangedSubviews.last as? UIButton { close.setTitle("Done", for: .normal) }
                     }

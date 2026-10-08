@@ -1,6 +1,6 @@
 //
 //  TorrentListViewController.swift
-//  IDownloader
+//  Pulled
 //
 //  Created by Daniil Vinogradov on 29/10/2023.
 //
@@ -37,9 +37,6 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
 
     private let addButton = UIBarButtonItem(title: %"common.add", image: .init(systemName: "plus"))
     private let preferencesButton = UIBarButtonItem(title: %"preferences", image: .init(systemName: "gearshape.fill"))
-    private lazy var filesButton = UIBarButtonItem(title: "Files", image: .init(systemName: "folder.fill"), primaryAction: UIAction { [weak self] _ in
-        self?.navigationController?.pushViewController(FileDownloadsViewController(), animated: true)
-    })
     private let sortButton = UIBarButtonItem(title: %"list.sort", image: .icSort)
     private let rssButton = UIBarButtonItem()
 
@@ -70,7 +67,7 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
                 .flexibleSpace(),
                 deleteButton
             ].compactMap { $0 } :
-            [addButton, .init(systemItem: .flexibleSpace), filesButton, .init(systemItem: .flexibleSpace), preferencesButton]
+            [addButton, .init(systemItem: .flexibleSpace), preferencesButton]
     }
 
     override func viewDidLoad() {
@@ -133,55 +130,23 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
         toolbarItems = getToolBarItems
 
         collectionView.contextMenuConfigurationForItemsAt = { [unowned self] indexPaths, _ in
-            guard indexPaths.count > 0 else { return nil }
-
-            if indexPaths.count == 1 {
-                guard let indexPath = indexPaths.first,
-                      let torrentHandle = (viewModel.sections[indexPath.section].items[indexPath.item] as? TorrentListItemViewModel)?.torrentHandle
-                else { return nil }
-
-                return UIContextMenuConfiguration {
-                    TorrentDetailsViewModel.resolveVC(with: torrentHandle)
-                } actionProvider: { _ in
-                    let start = UIAction(title: %"details.start", image: .init(systemName: "play.fill"), attributes: torrentHandle.snapshot.canResume ? [] : .hidden, handler: { _ in
-                        torrentHandle.resume()
-                    })
-                    let pause = UIAction(title: %"details.pause", image: .init(systemName: "pause.fill"), attributes: torrentHandle.snapshot.canPause ? [] : .hidden, handler: { _ in
-                        torrentHandle.pause()
-                    })
-                    let delete = UIAction(title: %"common.delete", image: UIImage(systemName: "trash.fill"), attributes: .destructive) { [unowned self] _ in
-                        viewModel.removeTorrent(torrentHandle)
-                    }
-
-                    return UIMenu(title: torrentHandle.snapshot.name, children: [
-                        start,
-                        pause,
-                        UIMenu(options: .displayInline,
-                               children: [delete])
-                    ])
+            let items = indexPaths.compactMap { viewModel.sections[$0.section].items[$0.item] as? TorrentListItemViewModel }
+            guard !items.isEmpty else { return nil }
+            return UIContextMenuConfiguration {
+                items.count == 1 ? items.first?.previewController() : nil
+            } actionProvider: { _ in
+                let start = UIAction(title: %"details.start", image: .init(systemName: "play.fill"),
+                                     attributes: items.contains(where: \.canResume) ? [] : .hidden) { _ in
+                    items.filter(\.canResume).forEach { $0.resume() }
                 }
-            } else {
-                let handles = indexPaths.compactMap { indexPath in (viewModel.sections[indexPath.section].items[indexPath.item] as? TorrentListItemViewModel)?.torrentHandle }
-                return UIContextMenuConfiguration {
-                    nil
-                } actionProvider: { _ in
-                    let start = UIAction(title: %"details.start", image: .init(systemName: "play.fill"), handler: { _ in
-                        handles.forEach { $0.resume() }
-                    })
-                    let pause = UIAction(title: %"details.pause", image: .init(systemName: "pause.fill"), handler: { _ in
-                        handles.forEach { $0.pause() }
-                    })
-//                    let delete = UIAction(title: %"common.delete", image: UIImage(systemName: "trash.fill"), attributes: .destructive) { [unowned self] _ in
-//                        viewModel.removeTorrent(torrentHandle)
-//                    }
-
-                    return UIMenu(children: [
-                        start,
-                        pause
-//                        UIMenu(options: .displayInline,
-//                               children: [delete])
-                    ])
+                let pause = UIAction(title: %"details.pause", image: .init(systemName: "pause.fill"),
+                                     attributes: items.contains(where: \.canPause) ? [] : .hidden) { _ in
+                    items.filter(\.canPause).forEach { $0.pause() }
                 }
+                let delete = UIAction(title: %"common.delete", image: .init(systemName: "trash"), attributes: .destructive) { [unowned self] _ in
+                    viewModel.deleteAllSelected(at: indexPaths)
+                }
+                return UIMenu(title: items.count == 1 ? items[0].title : "Downloads", children: [start, pause, delete])
             }
         }
 
@@ -254,7 +219,7 @@ private extension TorrentListViewController {
         searchVC.showsSearchResultsController = false
         searchVC.searchBar.placeholder = %"common.search"
 
-        searchVC.searchBar.scopeButtonTitles = ["Torrents", "RSS"]
+        searchVC.searchBar.scopeButtonTitles = ["Downloads", "RSS"]
         searchVC.scopeBarActivation = .onSearchActivation
 
         navigationItem.searchController = searchVC
@@ -319,12 +284,11 @@ private extension TorrentListViewController {
             }
 
             collectionView.$selectedIndexPaths.uiSink { [unowned self] indexPaths in
-                let torrentHandles = indexPaths.compactMap { (viewModel.sections[$0.section].items[$0.item] as? TorrentListItemViewModel)?.torrentHandle }
-
-                playButton.isEnabled = torrentHandles.contains(where: { $0.snapshot.isPaused })
-                pauseButton.isEnabled = torrentHandles.contains(where: { !$0.snapshot.isPaused })
-                rehashButton.isEnabled = !torrentHandles.isEmpty
-                deleteButton.isEnabled = !torrentHandles.isEmpty
+                let items = indexPaths.compactMap { (viewModel.sections[$0.section].items[$0.item] as? TorrentListItemViewModel) }
+                playButton.isEnabled = items.contains(where: \.canResume)
+                pauseButton.isEnabled = items.contains(where: \.canPause)
+                rehashButton.isEnabled = items.contains { !$0.isFile }
+                deleteButton.isEnabled = !items.isEmpty
             }
 
             preferencesButton.tapPublisher.uiSink { [unowned self] _ in
@@ -345,8 +309,8 @@ private extension TorrentListViewController {
                     case .noData:
                         var config = UIContentUnavailableConfiguration.empty()
                         config.image = .init(systemName: "fireworks")
-                        config.text = %"list.empty.nodata.title"
-                        config.secondaryText = %"list.empty.nodata.subtitle"
+                        config.text = "No downloads"
+                        config.secondaryText = "Add a file URL, magnet link, or torrent to get started."
                         contentUnavailableConfiguration = config
                     case .badSearch:
                         contentUnavailableConfiguration = UIContentUnavailableConfiguration.search()
@@ -354,7 +318,7 @@ private extension TorrentListViewController {
                         var configuration = UIContentUnavailableConfiguration.empty()
                         configuration.image = .init(systemName: "line.3.horizontal.decrease")
                         configuration.text = %"list.empty.filter.title-\(filter.name)"
-                        configuration.secondaryText = %"list.empty.filter.subtitle"
+                        configuration.secondaryText = "Downloads in this state will appear here."
                         contentUnavailableConfiguration = configuration
                     case nil:
                         contentUnavailableConfiguration = nil
@@ -444,7 +408,6 @@ private extension TorrentListViewController {
                     } catch { presentRemoteTorrentDownloadError(error, url: url) }
                 } else {
                     FileDownloadService.shared.add(url)
-                    navigationController?.pushViewController(FileDownloadsViewController(), animated: true)
                 }
             }
         }, isPrimary: true)

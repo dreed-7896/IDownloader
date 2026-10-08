@@ -1,10 +1,3 @@
-//
-//  TorrentListItemViewModel.swift
-//  IDownloader
-//
-//  Created by Daniil Vinogradov on 29/10/2023.
-//
-
 import Combine
 import LibTorrent
 import MvvmFoundation
@@ -12,54 +5,92 @@ import SwiftUI
 
 class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectableProtocol, ObservableObject, Identifiable {
     var torrentHandle: TorrentHandle!
+    var fileID: UUID?
     var selectAction: (() -> Void)?
-    var id: ObjectIdentifier { .init(torrentHandle) }
+    var id: String { fileID?.uuidString ?? torrentHandle.snapshot.infoHashes.best.hex }
+    var isFile: Bool { fileID != nil }
+    var kindIcon: String { isFile ? "arrow.down.circle.fill" : "network" }
+    var file: FileDownload? { FileDownloadService.shared.downloads.first { $0.id == fileID } }
+    var listState: TorrentHandle.State { isFile ? (file?.listState ?? .finished) : torrentHandle.snapshot.friendlyState }
+    var addedDate: Date { isFile ? (file?.createdAt ?? .distantPast) : torrentHandle.metadata.dateAdded }
+    var creationDate: Date { isFile ? (file?.createdAt ?? .distantPast) : (torrentHandle.snapshot.creationDate ?? addedDate) }
+    var size: UInt64 { isFile ? UInt64(max(0, file?.totalBytes ?? 0)) : torrentHandle.snapshot.totalWanted }
+    var canResume: Bool { isFile ? file.map { [.paused, .failed].contains($0.state) } ?? false : torrentHandle.snapshot.canResume }
+    var canPause: Bool { isFile ? file.map { [.queued, .preparing, .downloading].contains($0.state) } ?? false : (torrentHandle.snapshot.canPause || DownloadQueue.shared.isQueued(torrentHandle)) }
 
-    @Published var title: String = ""
-    @Published var progressText: String = ""
-    @Published var statusText: String = ""
+    @Published var title = ""
+    @Published var progressText = ""
+    @Published var statusText = ""
     @Published var progress: Double = 0
+    @Published var connections: [Double] = [0]
+
+    convenience init(fileID: UUID) {
+        self.init()
+        self.fileID = fileID
+        updateUI()
+        disposeBag.bind {
+            FileDownloadService.shared.updates.filter { $0.id == fileID }
+                .sink { [weak self] _ in self?.updateUI() }
+        }
+        selectAction = { [unowned self] in
+            navigate(to: FileDownloadDetailsViewModel.self, with: fileID, by: .detail(asRoot: true))
+        }
+    }
 
     override func prepare(with model: TorrentHandle) {
         torrentHandle = model
         updateUI()
-
         disposeBag.bind {
-            torrentHandle.updatePublisher
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] _ in
-                    self?.updateUI()
-                }
+            model.updatePublisher.receive(on: DispatchQueue.main).sink { [weak self] _ in self?.updateUI() }
+            DownloadQueue.shared.changed.sink { [weak self] _ in self?.updateUI() }
         }
-
         selectAction = { [unowned self] in
             navigate(to: TorrentDetailsViewModel.self, with: model, by: .detail(asRoot: true))
         }
     }
 
-    override func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
+    override func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
+    func resume() {
+        if let fileID { FileDownloadService.shared.resume(fileID) } else { torrentHandle.resumeDownload() }
+    }
+    func pause() {
+        if let fileID { FileDownloadService.shared.pause(fileID) } else { torrentHandle.pauseDownload() }
+    }
+    func delete(deleteFiles: Bool) {
+        if let fileID { FileDownloadService.shared.remove(fileID, deleteFiles: deleteFiles) }
+        else { TorrentService.shared.removeTorrent(by: torrentHandle.snapshot.infoHashes, deleteFiles: deleteFiles) }
+    }
+    func previewController() -> UIViewController {
+        if let fileID { return FileDownloadDetailsViewModel.resolveVC(with: fileID) }
+        return TorrentDetailsViewModel.resolveVC(with: torrentHandle)
+    }
     func removeTorrent() {
-        alert(title: %"torrent.remove.title", message: torrentHandle.snapshot.name, actions: [
-            .init(title: %"torrent.remove.action.dropData", style: .destructive, action: { [unowned self] in
-                TorrentService.shared.removeTorrent(by: torrentHandle.snapshot.infoHashes, deleteFiles: true)
-            }),
-            .init(title: %"torrent.remove.action.keepData", style: .default, action: { [unowned self] in
-                TorrentService.shared.removeTorrent(by: torrentHandle.snapshot.infoHashes, deleteFiles: false)
-            }),
+        alert(title: "Remove download?", message: title, actions: [
+            .init(title: %"torrent.remove.action.dropData", style: .destructive, action: { [unowned self] in delete(deleteFiles: true) }),
+            .init(title: %"torrent.remove.action.keepData", style: .default, action: { [unowned self] in delete(deleteFiles: false) }),
             .init(title: %"common.cancel", style: .cancel, isPrimary: true)
         ])
     }
-}
-
-private extension TorrentListItemViewModel {
-    func updateUI() {
-        let percent = "\(String(format: "%.2f", torrentHandle.snapshot.progress * 100))%"
-        title = torrentHandle.snapshot.name
-        progressText = %"\(torrentHandle.snapshot.totalWantedDone.bitrateToHumanReadable) of \(torrentHandle.snapshot.totalWanted.bitrateToHumanReadable) (\(percent))"
-        statusText = "\(torrentHandle.snapshot.stateText)"
-        progress = torrentHandle.snapshot.progress
+    private func updateUI() {
+        if let fileID {
+            guard let file else { return }
+            title = file.name
+            progress = file.progress
+            let received = UInt64(max(0, file.receivedBytes)).bitrateToHumanReadable
+            let total = file.totalBytes > 0 ? UInt64(file.totalBytes).bitrateToHumanReadable : "Unknown size"
+            progressText = "\(received) of \(total) (\(String(format: "%.2f", progress * 100))%)"
+            statusText = file.stateTitle
+            if file.state == .downloading {
+                statusText += " - ↓ \(file.speed.bitrateToHumanReadable)/s - \(file.timeRemaining)"
+            } else if file.state == .failed, let error = file.error { statusText += " - \(error)" }
+            connections = FileDownloadService.shared.connections(fileID).map(\.progress)
+        } else {
+            let snapshot = torrentHandle.snapshot
+            title = snapshot.name
+            progress = snapshot.progress
+            progressText = "\(snapshot.totalWantedDone.bitrateToHumanReadable) of \(snapshot.totalWanted.bitrateToHumanReadable) (\(String(format: "%.2f", progress * 100))%)"
+            statusText = DownloadQueue.shared.isQueued(torrentHandle) ? "Queued" : snapshot.stateText
+        }
     }
 }
