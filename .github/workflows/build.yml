@@ -8,7 +8,7 @@ permissions:
   contents: write
 concurrency:
   group: idownloader-main
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: macos-26
