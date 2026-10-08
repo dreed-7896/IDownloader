@@ -1,0 +1,23 @@
+name: Import original iTorrent source
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/import-source.yml']
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout new independent repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Import iTorrent project snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --depth=1 https://github.com/XITRIX/iTorrent.git main
+          git read-tree --reset -u FETCH_HEAD
+          git commit -m "Import iTorrent source as independent IDownloader project"
+          git push origin HEAD:main
