@@ -67,7 +67,7 @@ class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectable
         if let fileID { FileDownloadService.shared.remove(fileID, deleteFiles: deleteFiles) }
         else { TorrentService.shared.removeTorrent(by: torrentHandle.snapshot.infoHashes, deleteFiles: deleteFiles) }
     }
-    func previewController() -> UIViewController {
+    @MainActor func previewController() -> UIViewController {
         if let fileID { return FileDownloadDetailsViewModel.resolveVC(with: fileID) }
         return TorrentDetailsViewModel.resolveVC(with: torrentHandle)
     }
