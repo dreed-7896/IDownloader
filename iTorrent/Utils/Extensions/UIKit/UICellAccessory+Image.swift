@@ -1,6 +1,6 @@
 //
 //  UICellAccessory+Image.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 05.07.2024.
 //

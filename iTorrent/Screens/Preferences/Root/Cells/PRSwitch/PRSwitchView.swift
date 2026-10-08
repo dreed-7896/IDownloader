@@ -1,6 +1,6 @@
 //
 //  PRSwitchView.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 08/11/2023.
 //

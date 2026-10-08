@@ -1,6 +1,6 @@
 //
 //  StoragePreferencesView.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 03.07.2024.
 //

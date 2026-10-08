@@ -1,6 +1,6 @@
 //
 //  TorrentDetailProgressCellViewModel.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 31/10/2023.
 //

@@ -1,6 +1,6 @@
 //
 //  DateExtensions.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 08.06.2020.
 //  Copyright © 2020  XITRIX. All rights reserved.

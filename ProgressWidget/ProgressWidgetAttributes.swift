@@ -1,6 +1,6 @@
 //
 //  ProgressWidgetAttributes.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 06.04.2024.
 //

@@ -1,6 +1,6 @@
 //
 //  NetworkMonitoringService.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 02.04.2024.
 //

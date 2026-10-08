@@ -1,6 +1,6 @@
 //
 //  BaseCollectionViewController.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 08.04.2024.
 //

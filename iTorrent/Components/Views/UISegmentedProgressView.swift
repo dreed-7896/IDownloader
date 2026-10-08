@@ -1,6 +1,6 @@
 //
 //  UISegmentedProgressView.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 01.04.2024.
 //

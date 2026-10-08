@@ -1,6 +1,6 @@
 //
 //  SceneDelegate.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 29/10/2023.
 //

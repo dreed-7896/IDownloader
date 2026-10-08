@@ -1,6 +1,6 @@
 //
 //  SceneDelegate+AVPlayer.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 16.06.2024.
 //

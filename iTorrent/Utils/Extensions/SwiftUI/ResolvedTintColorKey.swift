@@ -1,6 +1,6 @@
 //
 //  ResolvedTintColorKey.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 20.03.2026.
 //

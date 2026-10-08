@@ -1,6 +1,6 @@
 //
-//  iTorrent_TVApp.swift
-//  iTorrent-TV
+//  IDownloader_TVApp.swift
+//  IDownloader-TV
 //
 //  Created by Daniil Vinogradov on 09/12/2025.
 //

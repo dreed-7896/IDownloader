@@ -1,6 +1,6 @@
 //
 //  PatreonCredentials.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 11.05.2024.
 //

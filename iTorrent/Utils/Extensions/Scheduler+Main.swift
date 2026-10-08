@@ -1,6 +1,6 @@
 //
 //  Scheduler+Main.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 24/04/2024.
 //

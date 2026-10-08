@@ -1,6 +1,6 @@
 //
 //  PreferencesViewModel.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 06/11/2023.
 //
@@ -161,19 +161,14 @@ private extension PreferencesViewModel {
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
         let appBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
         let libtorrentVersion = TorrentService.version
-        let version = "iTorrent: v\(appVersion)-\(appBuild) | LibTorrent: v\(libtorrentVersion)"
+        let version = "IDownloader: v\(appVersion)-\(appBuild) | LibTorrent: v\(libtorrentVersion)"
         sections.append(.init(id: "version", header: %"preferences.version", footer: version, style: .insetGrouped) {
             PRButtonViewModel(with: .init(title: %"preferences.version.github", value: Just(%"common.open").eraseToAnyPublisher(), selectAction: { [unowned self] in
-                UIApplication.shared.open(.init(string: "https://github.com/XITRIX/iTorrent")!)
+                UIApplication.shared.open(.init(string: "https://github.com/dreed-7896/IDownloader")!)
                 dismissSelection.send()
             }))
         })
 
-        sections.append(.init(id: "donations", header: %"preferences.donations") {
-            PRButtonViewModel(with: .init(title: %"preferences.donations.patreon", accessories: [.disclosureIndicator()]) { [unowned self] in
-                navigate(to: PatreonPreferencesViewModel.self, by: .show)
-            })
-        })
     }
 
     func uiAction(from interfaceStyle: UIUserInterfaceStyle) -> UIAction {

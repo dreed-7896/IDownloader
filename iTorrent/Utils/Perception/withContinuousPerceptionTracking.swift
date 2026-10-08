@@ -1,6 +1,6 @@
 //
 //  withContinuousPerceptionTracking.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 11.06.2026.
 //

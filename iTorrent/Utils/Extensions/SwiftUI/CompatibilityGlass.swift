@@ -1,6 +1,6 @@
 //
 //  CompatibilityGlass.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 17.09.2025.
 //

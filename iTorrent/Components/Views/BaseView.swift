@@ -1,6 +1,6 @@
 //
 //  BaseView.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 25.04.2024.
 //

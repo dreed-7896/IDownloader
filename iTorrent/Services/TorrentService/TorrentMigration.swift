@@ -1,6 +1,6 @@
 //
 //  TorrentMigration.swift
-//  iTorrent
+//  IDownloader
 //
 //  Temporary compatibility migrations. Delete this file and its call sites
 //  after the supported migration window has elapsed.

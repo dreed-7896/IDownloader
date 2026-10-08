@@ -1,6 +1,6 @@
 //
 //  BaseSafariViewController.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 31.05.2024.
 //

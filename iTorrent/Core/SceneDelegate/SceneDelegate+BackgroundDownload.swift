@@ -1,6 +1,6 @@
 //
 //  SceneDelegate+BackgroundDownload.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 05.04.2024.
 //

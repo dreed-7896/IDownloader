@@ -1,6 +1,6 @@
 //
 //  PreferencesStorage.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 07/11/2023.
 //
@@ -165,7 +165,7 @@ extension Session.Settings {
         let preferences = PreferencesStorage.shared
 
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
-        settings.agentName = "iTorrent/\(appVersion)"
+        settings.agentName = "IDownloader/\(appVersion)"
         settings.peerFingerprint = peerFingerprint(for: appVersion)
 
         settings.maxActiveTorrents = preferences.maxActiveTorrents

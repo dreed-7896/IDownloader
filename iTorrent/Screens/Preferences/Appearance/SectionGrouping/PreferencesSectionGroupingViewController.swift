@@ -1,6 +1,6 @@
 //
 //  PreferencesSectionGroupingViewController.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 04/04/2024.
 //

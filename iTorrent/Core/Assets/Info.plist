@@ -4,7 +4,7 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.xitrix.itorrent.refresh</string>
+		<string>com.dreed7896.IDownloader.refresh</string>
 	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
@@ -29,7 +29,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.xitrix.magnet</string>
+			<string>com.dreed7896.IDownloader.magnet</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>magnet</string>

@@ -1,6 +1,6 @@
 //
 //  UIImage+IOSRelatedIcons.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 25.11.2025.
 //

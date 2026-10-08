@@ -1,6 +1,6 @@
 //
 //  SceneDelegate+URLProcessing.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 06.04.2024.
 //
@@ -22,7 +22,7 @@ extension SceneDelegate {
 private extension SceneDelegate {
     // Open torrent details by hash from Life Activity
     func tryOpenTorrentDetails(with url: URL) -> Bool {
-        let prefix = "iTorrent:hash:"
+        let prefix = url.absoluteString.hasPrefix("iTorrent:hash:") ? "iTorrent:hash:" : "IDownloader:hash:"
 
         guard url.absoluteString.hasPrefix(prefix) else { return false }
         let hash = url.absoluteString.replacingOccurrences(of: prefix, with: "")

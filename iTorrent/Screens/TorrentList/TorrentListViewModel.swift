@@ -1,6 +1,6 @@
 //
 //  TorrentListViewModel.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 29/10/2023.
 //
@@ -56,7 +56,7 @@ class TorrentListViewModel: BaseViewModel {
 
     required init() {
         super.init()
-        title = "iTorrent"
+        title = "IDownloader"
 
         filterButtons = [%"common.all"] + TorrentHandle.State.filterArray.map { $0.name }
 

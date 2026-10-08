@@ -1,6 +1,6 @@
 //
 //  BaseNavigationController.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Daniil Vinogradov on 30/10/2023.
 //

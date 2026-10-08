@@ -1,6 +1,6 @@
 //
 //  PauseTorrentIntent.swift
-//  iTorrent
+//  IDownloader
 //
 //  Created by Даниил Виноградов on 30.06.2024.
 //
