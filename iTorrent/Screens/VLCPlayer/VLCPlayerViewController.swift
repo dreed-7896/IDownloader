@@ -285,8 +285,11 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
         @State private var player = Player()
         @StateObject private var rendererRouteController = RendererRouteController()
         @State private var currentPlaybackTime: TimeInterval = 0
-        @State private var mediaTimeDuration: TimeInterval = 60 * 6
+        @State private var mediaTimeDuration: TimeInterval = 0
         @State private var isSeeking: Bool = false
+        @State private var swipeSeekStart: TimeInterval?
+        @State private var swipeSeekOffset: TimeInterval = 0
+        @State private var isHoldingDoubleSpeed = false
         @State private var audioTracks: [Track] = []
         @State private var textTracks: [Track] = []
         @State private var selectedAudioTrack: Track?
@@ -321,7 +324,7 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
                 tearDownPlayback()
             }
             .onChange(of: playbackRate) { newRate in
-                setPlaybackRate(newRate)
+                setPlaybackRate(isHoldingDoubleSpeed ? 2 : newRate)
             }
             .onChange(of: selectedAudioTrack) { track in
                 player.selectedAudioTrack = track
@@ -331,6 +334,9 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 restorePlaybackAfterForeground()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                resetGestures()
             }
         }
     }
@@ -366,14 +372,18 @@ private extension VLCPlayerViewController.VLCPlayerView {
                     .ignoresSafeArea()
             }
 
-            Color.clear
-                .contentShape(Rectangle())
-                .ignoresSafeArea()
-                .onTapGesture {
+            PlayerGestureSurface(
+                onTap: {
                     withAnimation(.easeInOut(duration: 0.28)) {
                         viewModel.showOverlay.toggle()
                     }
-                }
+                },
+                onSeekBegan: beginSwipeSeek,
+                onSeekChanged: updateSwipeSeek,
+                onSeekEnded: endSwipeSeek,
+                onHoldChanged: setHoldingDoubleSpeed
+            )
+                .ignoresSafeArea()
 
             ZStack {
                 CompatibilityGlassContainer(spacing: 24) {
@@ -420,6 +430,33 @@ private extension VLCPlayerViewController.VLCPlayerView {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
+
+            if swipeSeekStart != nil {
+                VStack(spacing: 8) {
+                    Label("\(swipeSeekOffset >= 0 ? "+" : "−")\(Int(abs(swipeSeekOffset)))s",
+                          systemImage: swipeSeekOffset >= 0 ? "goforward" : "gobackward")
+                        .font(.title2.weight(.semibold))
+                    Text(playbackTimeLabel(currentPlaybackTime))
+                        .font(.headline.monospacedDigit())
+                }
+                .foregroundStyle(.white)
+                .padding(24)
+                .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .allowsHitTesting(false)
+            }
+
+            if isHoldingDoubleSpeed {
+                Label("2× Speed", systemImage: "forward.fill")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(.black.opacity(0.7), in: Capsule())
+                    .padding(.top, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .allowsHitTesting(false)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -567,6 +604,7 @@ private extension VLCPlayerViewController.VLCPlayerView {
     }
 
     func tearDownPlayback(force: Bool = false) {
+        resetGestures()
 #if !os(visionOS)
         guard force || viewModel.pipController?.isActive != true else { return }
         Air.stop()
@@ -580,6 +618,131 @@ private extension VLCPlayerViewController.VLCPlayerView {
     private func updateMediaTimeDuration(_ duration: TimeInterval) {
         guard mediaTimeDuration != duration else { return }
         mediaTimeDuration = duration
+    }
+}
+
+// MARK: - Playback Gestures
+private extension VLCPlayerViewController.VLCPlayerView {
+    func beginSwipeSeek() {
+        guard !isRestoringPlayback, mediaTimeDuration > 0,
+              player.isSeekable || player.duration != nil else { return }
+        setHoldingDoubleSpeed(false)
+        swipeSeekStart = currentPlaybackTime
+        swipeSeekOffset = 0
+        isSeeking = true
+    }
+
+    func updateSwipeSeek(translation: CGFloat, width: CGFloat) {
+        guard let start = swipeSeekStart, width > 0 else { return }
+        // A full-width swipe seeks up to two minutes; short clips use their full duration.
+        let time = min(max(start + Double(translation / width) * min(mediaTimeDuration, 120), 0), mediaTimeDuration)
+        swipeSeekOffset = time - start
+        seek(to: time, fast: true)
+    }
+
+    func endSwipeSeek() {
+        guard swipeSeekStart != nil else { return }
+        let time = currentPlaybackTime
+        swipeSeekStart = nil
+        swipeSeekOffset = 0
+        isSeeking = false
+        seek(to: time)
+    }
+
+    func setHoldingDoubleSpeed(_ holding: Bool) {
+        if holding {
+            guard player.isPlaying, !isSeeking, !isRestoringPlayback else { return }
+            isHoldingDoubleSpeed = true
+            setPlaybackRate(2)
+        } else if isHoldingDoubleSpeed {
+            isHoldingDoubleSpeed = false
+            setPlaybackRate(playbackRate)
+        }
+    }
+
+    func resetGestures() {
+        endSwipeSeek()
+        setHoldingDoubleSpeed(false)
+    }
+
+    func playbackTimeLabel(_ time: TimeInterval) -> String {
+        let seconds = max(0, Int(time))
+        return seconds >= 3600
+            ? String(format: "%d:%02d:%02d", seconds / 3600, seconds % 3600 / 60, seconds % 60)
+            : String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+/// UIKit reports release and cancellation reliably, so temporary 2× never sticks.
+private struct PlayerGestureSurface: UIViewRepresentable {
+    let onTap: () -> Void
+    let onSeekBegan: () -> Void
+    let onSeekChanged: (CGFloat, CGFloat) -> Void
+    let onSeekEnded: () -> Void
+    let onHoldChanged: (Bool) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        let hold = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.hold(_:)))
+        hold.minimumPressDuration = 0.35
+        hold.allowableMovement = 12
+        let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pan(_:)))
+        pan.maximumNumberOfTouches = 1
+        pan.delegate = context.coordinator
+        pan.require(toFail: hold)
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tap(_:)))
+        tap.require(toFail: pan)
+        tap.require(toFail: hold)
+        view.addGestureRecognizer(hold)
+        view.addGestureRecognizer(pan)
+        view.addGestureRecognizer(tap)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) { context.coordinator.surface = self }
+
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        coordinator.surface.onSeekEnded()
+        coordinator.surface.onHoldChanged(false)
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var surface: PlayerGestureSurface
+        init(_ surface: PlayerGestureSurface) { self.surface = surface }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y)
+        }
+
+        @objc func tap(_ gesture: UITapGestureRecognizer) {
+            if gesture.state == .ended { surface.onTap() }
+        }
+
+        @objc func pan(_ gesture: UIPanGestureRecognizer) {
+            switch gesture.state {
+            case .began:
+                surface.onSeekBegan()
+                surface.onSeekChanged(gesture.translation(in: gesture.view).x, gesture.view?.bounds.width ?? 0)
+            case .changed:
+                surface.onSeekChanged(gesture.translation(in: gesture.view).x, gesture.view?.bounds.width ?? 0)
+            case .ended, .cancelled, .failed:
+                surface.onSeekEnded()
+            default: break
+            }
+        }
+
+        @objc func hold(_ gesture: UILongPressGestureRecognizer) {
+            switch gesture.state {
+            case .began: surface.onHoldChanged(true)
+            case .ended, .cancelled, .failed: surface.onHoldChanged(false)
+            default: break
+            }
+        }
     }
 }
 
@@ -752,7 +915,7 @@ private extension VLCPlayerViewController.VLCPlayerView {
             info[MPMediaItemPropertyPlaybackDuration] = max(duration, 0)
         }
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(currentPlaybackTime, 0)
-        info[MPNowPlayingInfoPropertyPlaybackRate] = player.isPlaying ? Double(playbackRate) : 0
+        info[MPNowPlayingInfoPropertyPlaybackRate] = player.isPlaying ? Double(isHoldingDoubleSpeed ? 2 : playbackRate) : 0
         nowPlayingCenter.nowPlayingInfo = info
     }
 

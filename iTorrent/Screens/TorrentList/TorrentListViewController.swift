@@ -37,6 +37,7 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
 
     private let addButton = UIBarButtonItem(title: %"common.add", image: .init(systemName: "plus"))
     private let preferencesButton = UIBarButtonItem(title: %"preferences", image: .init(systemName: "gearshape.fill"))
+    private let filesButton = UIBarButtonItem(title: "Files", image: .init(systemName: "folder"))
     private let sortButton = UIBarButtonItem(title: %"list.sort", image: .icSort)
     private let rssButton = UIBarButtonItem()
 
@@ -65,7 +66,7 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
                 .flexibleSpace(),
                 deleteButton
             ].compactMap { $0 } :
-            [addButton, .init(systemItem: .flexibleSpace), preferencesButton]
+            [addButton, .flexibleSpace(), filesButton, .flexibleSpace(), preferencesButton]
     }
 
     override func viewDidLoad() {
@@ -80,6 +81,10 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
 
         addButton.primaryAction = UIAction(title: %"common.add", image: .init(systemName: "plus")) { [unowned self] _ in
             present(makeUrlAlert(), animated: true)
+        }
+
+        filesButton.primaryAction = UIAction(title: "Files", image: .init(systemName: "folder")) { [weak self] _ in
+            self?.navigationController?.pushViewController(FileBrowserViewController(), animated: true)
         }
 
         playButton.primaryAction = .init(title: %"details.start", image: .init(systemName: "play.fill"), handler: { [unowned self] _ in

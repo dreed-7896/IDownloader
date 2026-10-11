@@ -112,6 +112,11 @@ final class FileDownloadDetailsViewController<VM: FileDownloadDetailsViewModel>:
         delete.primaryAction = UIAction(title: "Delete", image: .init(systemName: "trash")) { [weak self] _ in self?.viewModel.remove() }
         preview.primaryAction = UIAction(title: "Open file", image: .init(systemName: "doc.text.magnifyingglass")) { [weak self] _ in
             guard let self, let url = viewModel.fileURL, FileManager.default.fileExists(atPath: url.path) else { return }
+            if VLCPlayerViewModel.isMediaFile(url) {
+                viewModel.navigate(to: VLCPlayerViewModel.self, with: .init(url: url, torrentPair: nil),
+                                   by: .present(wrapInNavigation: true, from: nil, style: .fullScreen))
+                return
+            }
             let controller = QLPreviewController()
             controller.dataSource = self
             present(controller, animated: true)

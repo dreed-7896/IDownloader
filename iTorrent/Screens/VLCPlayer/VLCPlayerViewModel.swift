@@ -9,6 +9,7 @@ import Foundation
 import MvvmFoundation
 import LibTorrent
 import SwiftVLC
+import UniformTypeIdentifiers
 
 extension VLCPlayerViewModel {
     struct Config {
@@ -58,6 +59,12 @@ class VLCPlayerViewModel: BaseViewModelWith<VLCPlayerViewModel.Config>, Observab
 
         let resourceValues = try? url.resourceValues(forKeys: [.isRegularFileKey])
         return resourceValues?.isRegularFile != false
+    }
+
+    static func isMediaFile(_ url: URL) -> Bool {
+        let type = UTType(filenameExtension: url.pathExtension)
+        return type?.conforms(to: .movie) == true || type?.conforms(to: .audio) == true
+            || ["mkv", "avi", "webm", "flv", "wmv", "ts", "mts", "m2ts", "vob", "ogv", "m4v", "mp4", "mov", "mp3", "flac", "ogg", "opus"].contains(url.pathExtension.lowercased())
     }
 
     static func canOpenInVLC(_ url: URL, timeoutMilliseconds: Int32 = 3_000) async -> Media? {

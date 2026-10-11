@@ -207,6 +207,11 @@ private extension TorrentFilesViewController {
         let path = viewModel.filesForPreview[startIndex].path
         let url = viewModel.downloadPath.appending(path: path)
 
+        if VLCPlayerViewModel.isMediaFile(url) {
+            vlcPlayerAction(url: url, index: fileIndex)
+            return
+        }
+
         if UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true {
             previewAction(start: startIndex)
             return

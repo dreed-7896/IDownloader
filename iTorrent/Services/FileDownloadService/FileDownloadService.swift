@@ -205,6 +205,15 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
             .appendingPathComponent(id.uuidString, isDirectory: true).appendingPathComponent(item.name)
     }
 
+    func renameCompletedFile(_ id: UUID, to name: String) throws {
+        guard let index = index(id), downloads[index].state == .completed,
+              let source = fileURL(id) else { return }
+        let destination = source.deletingLastPathComponent().appendingPathComponent(name)
+        if source != destination { try FileManager.default.moveItem(at: source, to: destination) }
+        downloads[index].name = name
+        publish(id)
+    }
+
     private struct Tag {
         var id: UUID
         var generation: UUID
