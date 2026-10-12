@@ -362,7 +362,7 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
         for handle in TorrentService.shared.torrents.values {
             guard let path = handle.snapshot.downloadPath else { continue }
             if let file = handle.snapshot.files.first(where: { path.appendingPathComponent($0.path).standardizedFileURL == url.standardizedFileURL }) {
-                return (handle, file.index)
+                return (handle: handle, fileIndex: Int(file.index))
             }
         }
         return nil
