@@ -182,6 +182,7 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
         @State private var fitMode: VideoFitMode = .fullWidth
         @State private var subtitlesDisabled = false
         @State private var preferredSubtitleLanguage: String?
+        @State private var controlRegions: [CGRect] = []
         @State private var playbackRate: Float = 1
         @State private var didStartPlayback = false
         @State private var isRestoringPlayback = false
@@ -273,15 +274,19 @@ private extension VLCPlayerViewController.VLCPlayerView {
                     LinearGradient(colors: [.black.opacity(0.6), .clear, .clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
                         .allowsHitTesting(false)
                     overlayHeader
+                        .playerControlArea()
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    CompatibilityGlassContainer(spacing: 24) { overlayButtons }
+                    CompatibilityGlassContainer(spacing: 24) { overlayButtons.playerControlArea() }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     bottomControls
+                        .playerControlArea()
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 }
                 gestureIndicators
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
+            .coordinateSpace(name: "playerSurface")
+            .onPreferenceChange(PlayerControlAreaKey.self) { controlRegions = $0 }
             .clipped()
         }
         .ignoresSafeArea()
@@ -289,6 +294,7 @@ private extension VLCPlayerViewController.VLCPlayerView {
 
     var gestureSurface: some View {
         PlayerGestureSurface(
+            protectedRegions: showOverlay ? controlRegions : [],
             onTap: {
                 withAnimation(.easeInOut(duration: 0.2)) { viewModel.showOverlay.toggle() }
             },
@@ -333,6 +339,7 @@ private extension VLCPlayerViewController.VLCPlayerView {
     var bottomControls: some View {
         CompatibilityGlassContainer(spacing: 12) {
             VStack(spacing: 10) {
+                controlsBar
                 TimelineView(
                     mediaLengthTime: mediaTimeDuration,
                     currentPlaybackTime: $currentPlaybackTime,
@@ -342,7 +349,6 @@ private extension VLCPlayerViewController.VLCPlayerView {
                     onScrubEnded: { seek(to: $0, fast: false) }
                 )
                 .compatibilityGlassID("timeline", in: glassNamespace)
-                controlsBar
             }
         }
         .padding(.leading, viewModel.playerSafeAreaInsets.left + 16)
@@ -671,8 +677,29 @@ private extension VLCPlayerViewController.VLCPlayerView {
     }
 }
 
+private struct PlayerControlAreaKey: PreferenceKey {
+    static let defaultValue: [CGRect] = []
+
+    static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+private extension View {
+    func playerControlArea() -> some View {
+        background {
+            GeometryReader { geometry in
+                Color.clear
+                    .preference(key: PlayerControlAreaKey.self, value: [geometry.frame(in: .named("playerSurface"))])
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
 /// UIKit reports release and cancellation reliably, so temporary 2× never sticks.
 private struct PlayerGestureSurface: UIViewRepresentable {
+    let protectedRegions: [CGRect]
     let onTap: () -> Void
     let onSeekBegan: () -> Void
     let onSeekChanged: (CGFloat, CGFloat) -> Void
@@ -691,11 +718,13 @@ private struct PlayerGestureSurface: UIViewRepresentable {
         let hold = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.hold(_:)))
         hold.minimumPressDuration = 0.15
         hold.allowableMovement = 8
+        hold.delegate = context.coordinator
         let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pan(_:)))
         pan.maximumNumberOfTouches = 1
         pan.delegate = context.coordinator
         pan.require(toFail: hold)
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tap(_:)))
+        tap.delegate = context.coordinator
         tap.require(toFail: pan)
         tap.require(toFail: hold)
         view.addGestureRecognizer(hold)
@@ -717,6 +746,11 @@ private struct PlayerGestureSurface: UIViewRepresentable {
         private enum Mode { case seek, brightness, volume, close }
         private var mode: Mode?
         init(_ surface: PlayerGestureSurface) { self.surface = surface }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            let point = touch.location(in: gestureRecognizer.view)
+            return !surface.protectedRegions.contains { $0.contains(point) }
+        }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
             guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
@@ -948,6 +982,7 @@ private extension VLCPlayerViewController.VLCPlayerView {
                     .frame(width: size.view, height: size.view)
                     .font(.system(size: size.font, weight: .medium))
                     .foregroundStyle(Color.white)
+                    .contentShape(Rectangle())
 
                 if #available(iOS 17.0, *) {
                     image.contentTransition(.symbolEffect(.replace.downUp, options: .speed(3)))
@@ -957,6 +992,7 @@ private extension VLCPlayerViewController.VLCPlayerView {
             }
 
             button
+                .buttonStyle(.plain)
                 .compatibilityGlassEffect(isClear: true, interactive: true)
                 .compatibilityGlassTransition()
         }

@@ -38,9 +38,58 @@ class VLCPlayerViewModel: BaseViewModelWith<VLCPlayerViewModel.Config>, Observab
     override func prepare(with model: Config) {
         self.url = model.url
         self.torrentPair = model.torrentPair
-        playlist = model.playlist.isEmpty ? [model.url] : model.playlist
-        playlistIndex = playlist.firstIndex(of: model.url) ?? 0
+        playlist = model.playlist.isEmpty ? makeDefaultPlaylist(for: model) : model.playlist
+        playlistIndex = playlist.firstIndex { $0.standardizedFileURL == model.url.standardizedFileURL } ?? 0
         binding()
+    }
+
+    private func makeDefaultPlaylist(for model: Config) -> [URL] {
+        guard Self.isVideoFile(model.url) else { return [model.url] }
+        var candidates: [URL] = []
+        if let pair = model.torrentPair, let root = pair.handle.snapshot.downloadPath {
+            candidates = pair.handle.snapshot.files.filter { $0.downloaded >= $0.size }
+                .map { root.appendingPathComponent($0.path) }
+        } else {
+            let parent = model.url.deletingLastPathComponent()
+            let downloads = TorrentService.downloadPath.appendingPathComponent("Downloads")
+            if UUID(uuidString: parent.lastPathComponent) != nil,
+               parent.deletingLastPathComponent().standardizedFileURL == downloads.standardizedFileURL {
+                // File downloads have separate UUID folders but form one video collection.
+                for child in children(of: downloads) {
+                    if UUID(uuidString: child.lastPathComponent) != nil, child.isDirectory {
+                        candidates.append(contentsOf: children(of: child))
+                    } else {
+                        candidates.append(child)
+                    }
+                }
+            } else {
+                candidates = children(of: parent)
+            }
+        }
+
+        var incomplete = Set<URL>()
+        for handle in TorrentService.shared.torrents.values {
+            guard let root = handle.snapshot.downloadPath else { continue }
+            for file in handle.snapshot.files where file.downloaded < file.size {
+                incomplete.insert(root.appendingPathComponent(file.path).standardizedFileURL)
+            }
+        }
+        for download in FileDownloadService.shared.downloads where download.state != .completed {
+            if let url = FileDownloadService.shared.fileURL(download.id) { incomplete.insert(url.standardizedFileURL) }
+        }
+
+        let current = model.url.standardizedFileURL
+        candidates.append(model.url)
+        return Array(Set(candidates.map(\.standardizedFileURL)))
+            .filter { $0 == current || (Self.isVideoFile($0) && !incomplete.contains($0) && Self.validateURL($0)) }
+            .sorted {
+                let order = $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent)
+                return order == .orderedSame ? $0.path < $1.path : order == .orderedAscending
+            }
+    }
+
+    private func children(of url: URL) -> [URL] {
+        (try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
     }
 
     private func binding() {
@@ -84,6 +133,7 @@ class VLCPlayerViewModel: BaseViewModelWith<VLCPlayerViewModel.Config>, Observab
     var hasNext: Bool { playlistIndex + 1 < playlist.count }
 
     func moveInPlaylist(by offset: Int) {
+        guard offset != 0 else { return }
         var index = playlistIndex + offset
         while playlist.indices.contains(index) {
             let nextURL = playlist[index]
