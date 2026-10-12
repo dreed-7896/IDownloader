@@ -11,7 +11,12 @@ import UIKit
 
 extension SceneDelegate {
     func processURL(_ url: URL) {
-        Task {
+        Task { @MainActor in
+            let application = UIApplication.shared
+            let startupTask = application.beginBackgroundTask(withName: "Start shared download", expirationHandler: nil)
+            defer {
+                if startupTask != .invalid { application.endBackgroundTask(startupTask) }
+            }
             if ["pulled", "idownloader"].contains(url.scheme?.lowercased() ?? ""), url.host == "shared" {
                 let links = SharedDownloadInbox.links(from: url)
                 if links.isEmpty { consumeSharedLinks() }
@@ -26,13 +31,24 @@ extension SceneDelegate {
             }
             if tryOpenTorrentDetails(with: url) { return }
             if tryOpenAddTorrent(with: url) { return }
-            if tryOpenAddMagnet(with: url) { return }
-            if let id = FileDownloadService.shared.add(url) { showFileDownloads(selected: id) }
+            if tryOpenAddMagnet(with: url) {
+                startSharedDownloads()
+                return
+            }
+            if let id = FileDownloadService.shared.add(url) {
+                startSharedDownloads()
+                showFileDownloads(selected: id)
+            }
         }
     }
 
     func consumeSharedLinks() {
         SharedDownloadInbox.consume { processURL($0) }
+    }
+
+    private func startSharedDownloads() {
+        DownloadQueue.shared.startPendingDownloads()
+        if UIApplication.shared.applicationState == .background { startBackgroundIfNeeded() }
     }
 
     func showFileDownloads(selected: UUID? = nil) {
@@ -78,7 +94,11 @@ private extension SceneDelegate {
               let magnet = MagnetURI(with: url)
         else { return false }
 
-        TorrentService.shared.addTorrent(by: magnet)
+        if let existing = TorrentService.shared.torrents[magnet.infoHashes] {
+            if !existing.snapshot.isFinished { existing.resumeDownload() }
+        } else {
+            TorrentService.shared.addTorrent(by: magnet)
+        }
         return true
     }
 

@@ -120,12 +120,16 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
     @discardableResult
     func add(_ url: URL) -> UUID? {
         guard ["http", "https"].contains(url.scheme?.lowercased()), url.host != nil else { return nil }
-        if let existing = downloads.first(where: { $0.url == url && ($0.queueEligible || $0.state == .paused) }) { return existing.id }
+        if let existing = downloads.first(where: { $0.url == url && $0.state != .completed }) {
+            if [.paused, .failed].contains(existing.state) { resume(existing.id) }
+            DownloadQueue.shared.startPendingDownloads()
+            return existing.id
+        }
         let item = FileDownload(url: url, name: url.lastPathComponent.isEmpty ? "Download" : url.lastPathComponent,
                                 state: .queued, requestedParts: min(16, max(1, PreferencesStorage.shared.fileDownloadParts)))
         downloads.insert(item, at: 0)
         publish(item.id)
-        DownloadQueue.shared.schedule()
+        DownloadQueue.shared.startPendingDownloads()
         return item.id
     }
 
@@ -546,6 +550,23 @@ final class DownloadQueue {
         return requested.contains(key) && !running.contains(key) && handle.snapshot.friendlyState != .storageError
     }
 
+    var hasPendingTorrentDownloads: Bool {
+        // Background-service checks can run off the main queue; read a saved
+        // snapshot instead of the queue's mutable requested set.
+        let pendingRequests = Set(UserDefaults.standard.stringArray(forKey: "downloadQueueRequestedTorrents") ?? [])
+        return TorrentService.shared.torrents.values.contains { handle in
+            let snapshot = handle.snapshot
+            return pendingRequests.contains(snapshot.infoHashes.best.hex)
+                && !snapshot.isFinished && snapshot.friendlyState != .storageError
+        }
+    }
+
+    /// Shared links should submit transfer tasks before the app can be suspended.
+    func startPendingDownloads() {
+        guard Thread.isMainThread else { schedule(); return }
+        apply()
+    }
+
     func schedule() {
         guard !pending else { return }
         pending = true
@@ -568,7 +589,9 @@ final class DownloadQueue {
         let service = TorrentService.shared
         let files = FileDownloadService.shared
         let handles = Array(service.torrents.values).filter { $0.snapshot.isValid }
-        let existing = Set(handles.map { $0.snapshot.infoHashes.best.hex })
+        // A newly added handle can briefly have no valid snapshot. Keep its start
+        // request until the engine publishes a usable snapshot or removes it.
+        let existing = Set(service.torrents.keys.map { $0.best.hex })
         requested.formIntersection(existing)
         for handle in handles where !handle.snapshot.isPaused {
             let key = handle.snapshot.infoHashes.best.hex

@@ -83,7 +83,7 @@ final class ShareViewController: UIViewController {
                 guard let self else { return }
                 if opened { self.done(); return }
                 if queued {
-                    self.statusLabel.text = "Added to Pulled. Open Pulled to start your download."
+                    self.statusLabel.text = "Added to Pulled. Open Pulled once; the download will start automatically when a queue slot is available."
                 } else {
                     UIPasteboard.general.string = self.urls.map(\.absoluteString).joined(separator: "\n")
                     self.statusLabel.text = self.urls.count == 1

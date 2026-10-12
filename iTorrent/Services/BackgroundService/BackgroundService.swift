@@ -64,7 +64,7 @@ class BackgroundService: BackgroundServiceProtocol {
 extension BackgroundService {
     static var isBackgroundNeeded: Bool {
         TorrentService.shared.torrents.values.contains(where: { $0.snapshot.needBackground })
-
+            || DownloadQueue.shared.hasPendingTorrentDownloads
     }
 }
 
