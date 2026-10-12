@@ -69,6 +69,13 @@ private extension PreferencesViewModel {
 //            })
         })
 
+        sections.append(.init(id: "security", header: "Security") {
+            PRButtonViewModel(with: .init(title: "App lock", accessories: [.disclosureIndicator()]) { [unowned self] in
+                navigationService?()?.navigationController?.pushViewController(AppLockSettingsViewController(), animated: true)
+                dismissSelection.send()
+            })
+        })
+
 
 #if IS_SUPPORT_LOCATION_BG
         sections.append(.init(id: "background", header: %"preferences.background") {

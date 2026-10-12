@@ -53,7 +53,11 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
         search.searchBar.placeholder = "Search files"
         navigationItem.searchController = search
         definesPresentationContext = true
-        navigationItem.rightBarButtonItem = sortButton
+        let videos = UIBarButtonItem(title: "Videos", image: UIImage(systemName: "play.rectangle.on.rectangle"),
+                                    primaryAction: UIAction { [weak self] _ in
+            self?.navigationController?.pushViewController(VideoGalleryViewController(), animated: true)
+        })
+        navigationItem.rightBarButtonItems = [sortButton, videos]
         configureSortMenu()
 
         let newFolder = UIBarButtonItem(title: "New folder", image: UIImage(systemName: "folder.badge.plus"),

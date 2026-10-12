@@ -11,6 +11,7 @@ import UIKit
 import AVKit
 
 class SceneDelegate: MvvmSceneDelegate {
+    private(set) var appLock: AppLockController?
     override func initialSetup() {
         UIView.enableUIColorsToLayer()
     }
@@ -99,6 +100,7 @@ class SceneDelegate: MvvmSceneDelegate {
 
     override func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         super.scene(scene, willConnectTo: session, options: connectionOptions)
+        if let window { appLock = AppLockController(window: window) }
         invokeInitialSetup()
         consumeSharedLinks()
         connectionOptions.urlContexts.forEach { context in
@@ -115,6 +117,7 @@ class SceneDelegate: MvvmSceneDelegate {
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
+        appLock?.didEnterBackground()
         UIApplication.shared.applicationIconBadgeNumber = 0
         startBackgroundIfNeeded()
     }
@@ -125,8 +128,13 @@ class SceneDelegate: MvvmSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
+        appLock?.didBecomeActive()
         consumeSharedLinks()
         NotificationCenter.default.post(name: .init("fileDownloadsBecameActive"), object: nil)
+    }
+
+    func sceneWillResignActive(_ scene: UIScene) {
+        appLock?.willResignActive()
     }
 
     override func binding() {

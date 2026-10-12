@@ -37,6 +37,9 @@ class PreferencesStorage: Resolvable {
     static let shared = PreferencesStorage()
 
     @UserDefaultItem("fileDownloadParts", 4) var fileDownloadParts: Int
+    @UserDefaultItem("appLockEnabled", false) var appLockEnabled: Bool
+    @UserDefaultItem("appLockRequireAfter", 0) var appLockRequireAfter: Int
+    @UserDefaultItem("appLockWhileDownloading", true) var appLockWhileDownloading: Bool
 
     static let defaultTorrentListGroupsSortingArray: [TorrentHandle.State] = [
         .checkingFiles,

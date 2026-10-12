@@ -8,6 +8,13 @@
 import UIKit
 
 class BaseNavigationController: SANavigationController {
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        (topViewController as? VLCPlayerViewController)?.supportedInterfaceOrientations ?? super.supportedInterfaceOrientations
+    }
+
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        (topViewController as? VLCPlayerViewController)?.preferredInterfaceOrientationForPresentation ?? super.preferredInterfaceOrientationForPresentation
+    }
     init() {
         super.init(rootViewController: UIViewController())
     }

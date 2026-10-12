@@ -13,36 +13,6 @@ import AVKit
 import MediaPlayer
 import SwiftVLC
 
-struct TracksMenuView: View {
-    let tracks: [Track]
-    @Binding var selectedTrack: Track?
-    let title: LocalizedStringKey
-    let systemImage: String
-
-    var body: some View {
-        Menu {
-            Section {
-                ForEach(tracks) { track in
-                    Toggle(track.title, isOn: .init(get: {
-                        selectedTrack?.id == track.id
-                    }, set: { value in
-                        guard value else { return }
-                        selectedTrack = track
-                    }))
-                }
-            } header: {
-                Text(title)
-            }
-        } label: {
-            Image(systemName: systemImage)
-        }
-        .menuOrder(.fixed)
-        .labelStyle(.iconOnly)
-        .imageScale(.medium)
-        .accessibilityLabel(title)
-    }
-}
-
 struct PlaybackRateMenuView: View {
     let rates: [Float]
     @Binding var selectedRate: Float
@@ -81,29 +51,21 @@ private extension Float {
     }
 }
 
-private extension Track {
-    var title: String {
-        [trackDescription ?? name, (localizedLanguageName ?? language).map { "[\($0)]" }]
-            .compactMap { $0 }
-            .joined(separator: " - ")
-    }
-
-    var localizedLanguageName: String? {
-        guard let language else { return nil }
-        return Locale(identifier: "en").localizedString(forLanguageCode: language)
-    }
-}
-
 class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Body>, MvvmViewControllerProtocol {
     var viewModel: VLCPlayerViewModel
     private var disposeBag = DisposeBag() // [AnyCancellable] = []
-#if !os(visionOS)
-    private var pipEventsTask: Task<Void, Never>?
-    private weak var observedPictureInPictureController: PiPController?
-    private var isDismissedForPictureInPicture = false
-    private var isRestoringFromPictureInPicture = false
-    private var pictureInPicturePresentationController: UIViewController?
-#endif
+    private let volumeView = MPVolumeView(frame: CGRect(x: -200, y: -200, width: 160, height: 40))
+    private var originalBrightness: CGFloat?
+    private var originalIdleTimerDisabled = false
+    private var originalOrientation: UIInterfaceOrientation = .portrait
+
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        viewModel.isLandscape ? .landscape : .portrait
+    }
+
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        viewModel.isLandscape ? .landscapeRight : .portrait
+    }
 
     override var useMarqueeLabel: Bool { true }
 
@@ -132,168 +94,79 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
             dismiss()
         })
 
+        volumeView.alpha = 0.01
+        view.addSubview(volumeView)
         disposeBag.bind {
-#if !os(visionOS)
-            viewModel.$pipController
-                .compactMap { $0 }
-                .sink { [weak self] controller in
-                    self?.configurePictureInPicture(controller)
-                }
-#endif
-            #if !os(visionOS)
-            Air.shared.$connected.combineLatest(viewModel.$showOverlay)
-                .sink { [weak self] aired, value in
-                    let show = aired || value
-                    self?.navigationController?.setNavigationBarHidden(!show, animated: true)
-                }
-            #else
-            viewModel.$showOverlay
-                .sink { [weak self] show in
-                    self?.navigationController?.setNavigationBarHidden(!show, animated: true)
-                }
-            #endif
+            viewModel.$showOverlay.sink { [weak self] show in
+                self?.navigationController?.setNavigationBarHidden(!show, animated: true)
+            }
+            viewModel.$url.sink { [weak self] url in self?.title = url?.lastPathComponent }
+            viewModel.$isLandscape.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.rotatePlayer() }
+            viewModel.closeSignal.sink { [weak self] _ in self?.dismiss(animated: true) }
+            viewModel.volumeSignal.sink { [weak self] volume in
+                guard let slider = self?.volumeView.subviews.compactMap({ $0 as? UISlider }).first else { return }
+                slider.setValue(volume, animated: false)
+                slider.sendActions(for: .valueChanged)
+                slider.sendActions(for: .touchUpInside)
+            }
         }
     }
 
-#if !os(visionOS)
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setToolbarHidden(true, animated: false)
+        originalBrightness = view.window?.windowScene?.screen.brightness ?? UIScreen.main.brightness
+        originalOrientation = presentingViewController?.view.window?.windowScene?.interfaceOrientation
+            ?? navigationController?.presentingViewController?.view.window?.windowScene?.interfaceOrientation ?? .portrait
+        originalIdleTimerDisabled = UIApplication.shared.isIdleTimerDisabled
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-
-        if let controller = viewModel.pipController {
-            configurePictureInPicture(controller)
-        }
+        rotatePlayer()
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-
-        guard viewModel.pipController?.isActive != true else { return }
-        isDismissedForPictureInPicture = false
-        isRestoringFromPictureInPicture = false
-        pictureInPicturePresentationController = nil
-        pipEventsTask?.cancel()
-        pipEventsTask = nil
-        observedPictureInPictureController?.onRestoreUserInterface = nil
-        observedPictureInPictureController = nil
+        if let originalBrightness { UIScreen.main.brightness = originalBrightness }
+        UIApplication.shared.isIdleTimerDisabled = originalIdleTimerDisabled
+        #if !os(visionOS)
+        if let scene = presentingViewController?.view.window?.windowScene ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+            let orientation: UIInterfaceOrientationMask = originalOrientation.isLandscape ? .landscape : .portrait
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: orientation))
+        }
+        #endif
     }
 
-    private func configurePictureInPicture(_ controller: PiPController) {
-        guard viewModel.pipController === controller else { return }
-
-        controller.onRestoreUserInterface = { [weak self] completion in
-            Task { @MainActor in
-                self?.restoreFromPictureInPicture(completion: completion) ?? completion(false)
-            }
-        }
-
-        guard observedPictureInPictureController !== controller else { return }
-        observedPictureInPictureController?.onRestoreUserInterface = nil
-        pipEventsTask?.cancel()
-        observedPictureInPictureController = controller
-        pipEventsTask = Task { @MainActor [self, weak controller] in
-            guard let controller else { return }
-            for await event in controller.pipEvents {
-                guard !Task.isCancelled else { return }
-                switch event {
-                case .didStart:
-                    dismissForPictureInPicture()
-                case .didStop:
-                    let shouldTearDownPlayback = isDismissedForPictureInPicture && !isRestoringFromPictureInPicture
-                    isDismissedForPictureInPicture = false
-                    isRestoringFromPictureInPicture = false
-                    pictureInPicturePresentationController = nil
-
-                    if shouldTearDownPlayback {
-                        viewModel.requestPlaybackTeardown()
-                        controller.onRestoreUserInterface = nil
-                        pipEventsTask?.cancel()
-                        pipEventsTask = nil
-                        observedPictureInPictureController = nil
-                    }
-                default:
-                    break
-                }
-            }
-        }
+    private func rotatePlayer() {
+        #if !os(visionOS)
+        setNeedsUpdateOfSupportedInterfaceOrientations()
+        navigationController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        view.window?.windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: supportedInterfaceOrientations))
+        #endif
     }
-
-    private func dismissForPictureInPicture() {
-        guard !isDismissedForPictureInPicture else { return }
-        let controllerToRestore = navigationController ?? self
-        pictureInPicturePresentationController = controllerToRestore
-        isDismissedForPictureInPicture = true
-        isRestoringFromPictureInPicture = false
-        controllerToRestore.dismiss(animated: true)
-    }
-
-    private func restoreFromPictureInPicture(completion: @escaping @MainActor (Bool) -> Void) {
-        let controllerToPresent = pictureInPicturePresentationController ?? navigationController ?? self
-        isRestoringFromPictureInPicture = true
-
-        if controllerToPresent.presentingViewController != nil || controllerToPresent.view.window != nil {
-            didRestoreFromPictureInPicture()
-            completion(true)
-            return
-        }
-
-        guard let presenter = UIApplication.shared.keySceneWindow?.rootViewController?.topPresented else {
-            isRestoringFromPictureInPicture = false
-            completion(false)
-            return
-        }
-
-        presenter.present(controllerToPresent, animated: true) {
-            self.didRestoreFromPictureInPicture()
-            completion(true)
-        }
-    }
-
-    private func didRestoreFromPictureInPicture() {
-        isDismissedForPictureInPicture = false
-        isRestoringFromPictureInPicture = false
-        pictureInPicturePresentationController = nil
-    }
-#endif
 
     struct Body: View {
         @ObservedObject var viewModel: VLCPlayerViewModel
-
-        var body: some View {
-            VLCPlayerView(viewModel: viewModel)
-#if !os(visionOS)
-                .environmentObject(Air.shared)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            viewModel.pipController?.toggle()
-                        } label: {
-                            Image(systemName: "pip")
-                                .font(.callout)
-                                .fontWeight(.semibold)
-                        }
-                    }
-                }
-#endif
-        }
+        var body: some View { VLCPlayerView(viewModel: viewModel) }
     }
 
     struct VLCPlayerView: View {
-#if !os(visionOS)
-        @EnvironmentObject var airPlay: Air
-#endif
         @ObservedObject var viewModel: VLCPlayerViewModel
         @State private var player = Player()
-        @StateObject private var rendererRouteController = RendererRouteController()
         @State private var currentPlaybackTime: TimeInterval = 0
         @State private var mediaTimeDuration: TimeInterval = 0
         @State private var isSeeking: Bool = false
         @State private var swipeSeekStart: TimeInterval?
         @State private var swipeSeekOffset: TimeInterval = 0
         @State private var isHoldingDoubleSpeed = false
-        @State private var audioTracks: [Track] = []
-        @State private var textTracks: [Track] = []
-        @State private var selectedAudioTrack: Track?
-        @State private var selectedTextTrack: Track?
+        @State private var isMuted = false
+        @State private var verticalStartValue: CGFloat = 0
+        @State private var gestureHUD: String?
+        @State private var gestureHUDIcon = "sun.max.fill"
+        @State private var wasPlayingBeforeBackground = false
+        @State private var playbackError: String?
         @State private var playbackRate: Float = 1
         @State private var didStartPlayback = false
         @State private var isRestoringPlayback = false
@@ -307,14 +180,13 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
             WithPerceptionTracking {
                 content
             }
-            .task {
+            .task(id: viewModel.url) {
                 await preparePlaybackIfNeeded()
             }
             .task {
                 await observePlayerEvents()
             }
             .onAppear {
-                rendererRouteController.start()
                 configureRemoteCommandCenter()
                 viewModel.registerPlaybackTeardownHandler {
                     tearDownPlayback(force: true)
@@ -326,17 +198,24 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
             .onChange(of: playbackRate) { newRate in
                 setPlaybackRate(isHoldingDoubleSpeed ? 2 : newRate)
             }
-            .onChange(of: selectedAudioTrack) { track in
-                player.selectedAudioTrack = track
-            }
-            .onChange(of: selectedTextTrack) { track in
-                player.selectedSubtitleTrack = track
-            }
+            .onChange(of: isMuted) { player.isMuted = $0 }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 restorePlaybackAfterForeground()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .appDidUnlock)) { _ in
+                restorePlaybackAfterForeground()
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                wasPlayingBeforeBackground = wasPlayingBeforeBackground || player.isPlaying
                 resetGestures()
+                player.pause()
+                updateNowPlayingPlaybackState()
+            }
+            .alert("Unable to play video", isPresented: Binding(get: { playbackError != nil }, set: { if !$0 { playbackError = nil } })) {
+                Button("Close") { viewModel.closeSignal.send() }
+                if viewModel.hasNext { Button("Next video") { viewModel.moveInPlaylist(by: 1) } }
+            } message: {
+                Text(playbackError ?? "")
             }
         }
     }
@@ -344,13 +223,7 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
 
 // MARK: - Overlay State
 private extension VLCPlayerViewController.VLCPlayerView {
-    var showOverlay: Bool {
-#if !os(visionOS)
-        viewModel.showOverlay || airPlay.connected
-#else
-        viewModel.showOverlay
-#endif
-    }
+    var showOverlay: Bool { viewModel.showOverlay }
 
     var showsPlayingState: Bool {
         isRestoringPlayback ? false : player.isPlaying
@@ -381,21 +254,17 @@ private extension VLCPlayerViewController.VLCPlayerView {
                 onSeekBegan: beginSwipeSeek,
                 onSeekChanged: updateSwipeSeek,
                 onSeekEnded: endSwipeSeek,
-                onHoldChanged: setHoldingDoubleSpeed
+                onHoldChanged: setHoldingDoubleSpeed,
+                onVerticalBegan: beginVerticalGesture,
+                onVerticalChanged: updateVerticalGesture,
+                onVerticalEnded: endVerticalGesture,
+                onClose: { viewModel.closeSignal.send() }
             )
                 .ignoresSafeArea()
 
             ZStack {
                 CompatibilityGlassContainer(spacing: 24) {
                     VStack {
-#if !os(visionOS)
-                        if airPlay.connected {
-                            Label("Displaying via AirPlay", systemImage: "airplayvideo")
-                                .font(.title3.weight(.semibold))
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 14)
-                        }
-#endif
                         if showOverlay {
                             overlayButtons
                                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
@@ -458,53 +327,54 @@ private extension VLCPlayerViewController.VLCPlayerView {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .allowsHitTesting(false)
             }
+
+            if let gestureHUD {
+                Label(gestureHUD, systemImage: gestureHUDIcon)
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(20)
+                    .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     var controlsBar: some View {
         HStack {
-            HStack(spacing: 16) {
-                PlaybackRateMenuView(
-                    rates: playbackRates,
-                    selectedRate: $playbackRate
-                )
-
-                RendererRouteMenuView(
-                    player: player,
-                    routeController: rendererRouteController
-                )
+            HStack(spacing: 20) {
+                PlaybackRateMenuView(rates: playbackRates, selectedRate: $playbackRate)
+                Button {
+                    isMuted.toggle()
+                } label: {
+                    Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                }
+                .accessibilityLabel(isMuted ? "Unmute" : "Mute")
             }
             .padding(.horizontal)
             .frame(height: 44)
             .compatibilityGlassEffect(interactive: true)
-            .compatibilityGlassID("controls", in: glassNamespace)
-            .compatibilityGlassTransition()
-
             Spacer()
-
-            HStack(spacing: 16) {
-                TracksMenuView(
-                    tracks: audioTracks,
-                    selectedTrack: $selectedAudioTrack,
-                    title: "Audio",
-                    systemImage: "waveform"
-                )
-
-                TracksMenuView(
-                    tracks: textTracks,
-                    selectedTrack: $selectedTextTrack,
-                    title: "Subtitles",
-                    systemImage: "text.alignleft"
-                )
+            if viewModel.playlist.count > 1 {
+                HStack(spacing: 20) {
+                    Button { viewModel.moveInPlaylist(by: -1) } label: { Image(systemName: "backward.end.fill") }
+                        .disabled(!viewModel.hasPrevious).accessibilityLabel("Previous video")
+                    Button { viewModel.moveInPlaylist(by: 1) } label: { Image(systemName: "forward.end.fill") }
+                        .disabled(!viewModel.hasNext).accessibilityLabel("Next video")
+                }
+                .padding(.horizontal)
+                .frame(height: 44)
+                .compatibilityGlassEffect(interactive: true)
             }
-            .padding(.horizontal)
-            .frame(height: 44)
+            Button { viewModel.isLandscape.toggle() } label: {
+                Image(systemName: "rotate.right")
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel(viewModel.isLandscape ? "Rotate to portrait" : "Rotate to landscape")
             .compatibilityGlassEffect(interactive: true)
-            .compatibilityGlassID("controls", in: glassNamespace)
-            .compatibilityGlassTransition()
         }
-        .tint(Color.secondary)
+        .tint(.white)
         .font(.title3.weight(.semibold))
     }
 
@@ -529,48 +399,42 @@ private extension VLCPlayerViewController.VLCPlayerView {
     }
 }
 
-// MARK: - AirPlay and Picture in Picture
 private extension VLCPlayerViewController.VLCPlayerView {
-    @ViewBuilder
-    var videoOutput: some View {
-#if !os(visionOS)
-        PiPVideoView(
-            player,
-            controller: $viewModel.pipController,
-            onSurfaceReady: { surface in
-                Air.play(surface) {
-                    player.refreshVideoOutputAfterDisplayMove()
-                }
-            }
-        )
-#else
-        VideoView(player)
-#endif
-    }
+    var videoOutput: some View { VideoView(player) }
 }
 
 // MARK: - Playback Lifecycle
 private extension VLCPlayerViewController.VLCPlayerView {
     func preparePlaybackIfNeeded() async {
-        guard !didStartPlayback else { return }
-        didStartPlayback = true
+        resetGestures()
+        didStartPlayback = false
+        await player.stopAndWait()
+        currentPlaybackTime = 0
+        mediaTimeDuration = 0
+        pendingPausedSeekRefreshTime = nil
+        playbackError = nil
+        let url = viewModel.url!
         configureNowPlayingMetadata()
 
         do {
-            let media = try Media(url: viewModel.url)
+            let media = try Media(url: url)
             if let metadata = try? await media.parse(timeout: .seconds(1)), let duration = metadata.duration {
                 updateMediaTimeDuration(duration.timeInterval)
                 updateNowPlaying(duration: duration.timeInterval)
             }
             try Task.checkCancellation()
+            guard viewModel.url == url else { return }
             try player.play(media)
+            didStartPlayback = true
+            player.isMuted = isMuted
             setPlaybackRate(playbackRate)
-            syncTracksFromPlayer()
             updateNowPlayingPlaybackState()
         } catch is CancellationError {
-            player.stop()
+            if viewModel.url == url { player.stop() }
         } catch {
+            guard viewModel.url == url else { return }
             didStartPlayback = false
+            playbackError = error.localizedDescription
         }
     }
 
@@ -587,16 +451,15 @@ private extension VLCPlayerViewController.VLCPlayerView {
             case .lengthChanged(let duration):
                 updateMediaTimeDuration(duration.timeInterval)
                 updateNowPlaying(duration: duration.timeInterval)
-            case .tracksChanged, .mediaChanged:
-                syncTracksFromPlayer()
             case .stateChanged:
                 updateNowPlayingPlaybackState()
             case .encounteredError:
-                rendererRouteController.handlePlaybackFailure(on: player)
+                playbackError = "This file could not be played. It may be incomplete or use an unsupported format."
                 updateNowPlayingPlaybackState()
             case .endReached:
                 currentPlaybackTime = mediaTimeDuration
                 updateNowPlayingPlaybackState()
+                if viewModel.hasNext { viewModel.moveInPlaylist(by: 1) }
             default:
                 break
             }
@@ -605,11 +468,6 @@ private extension VLCPlayerViewController.VLCPlayerView {
 
     func tearDownPlayback(force: Bool = false) {
         resetGestures()
-#if !os(visionOS)
-        guard force || viewModel.pipController?.isActive != true else { return }
-        Air.stop()
-#endif
-        rendererRouteController.stop()
         player.stop()
         remoteCommands.tearDown()
         viewModel.clearPlaybackTeardownHandler()
@@ -663,7 +521,29 @@ private extension VLCPlayerViewController.VLCPlayerView {
     func resetGestures() {
         endSwipeSeek()
         setHoldingDoubleSpeed(false)
+        gestureHUD = nil
     }
+
+    func beginVerticalGesture(isLeft: Bool) {
+        setHoldingDoubleSpeed(false)
+        verticalStartValue = isLeft ? UIScreen.main.brightness : CGFloat(AVAudioSession.sharedInstance().outputVolume)
+        gestureHUDIcon = isLeft ? "sun.max.fill" : (isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+    }
+
+    func updateVerticalGesture(isLeft: Bool, translation: CGFloat, height: CGFloat) {
+        let value = min(max(verticalStartValue - translation / max(height, 1) * 1.5, 0), 1)
+        if isLeft {
+            UIScreen.main.brightness = value
+            gestureHUD = "Brightness \(Int(value * 100))%"
+        } else if isMuted {
+            gestureHUD = "Muted"
+        } else {
+            viewModel.volumeSignal.send(Float(value))
+            gestureHUD = "Volume \(Int(value * 100))%"
+        }
+    }
+
+    func endVerticalGesture() { gestureHUD = nil }
 
     func playbackTimeLabel(_ time: TimeInterval) -> String {
         let seconds = max(0, Int(time))
@@ -680,6 +560,10 @@ private struct PlayerGestureSurface: UIViewRepresentable {
     let onSeekChanged: (CGFloat, CGFloat) -> Void
     let onSeekEnded: () -> Void
     let onHoldChanged: (Bool) -> Void
+    let onVerticalBegan: (Bool) -> Void
+    let onVerticalChanged: (Bool, CGFloat, CGFloat) -> Void
+    let onVerticalEnded: () -> Void
+    let onClose: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -687,8 +571,8 @@ private struct PlayerGestureSurface: UIViewRepresentable {
         let view = UIView()
         view.backgroundColor = .clear
         let hold = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.hold(_:)))
-        hold.minimumPressDuration = 0.35
-        hold.allowableMovement = 12
+        hold.minimumPressDuration = 0.15
+        hold.allowableMovement = 8
         let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pan(_:)))
         pan.maximumNumberOfTouches = 1
         pan.delegate = context.coordinator
@@ -707,16 +591,19 @@ private struct PlayerGestureSurface: UIViewRepresentable {
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
         coordinator.surface.onSeekEnded()
         coordinator.surface.onHoldChanged(false)
+        coordinator.surface.onVerticalEnded()
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var surface: PlayerGestureSurface
+        private enum Mode { case seek, brightness, volume, close }
+        private var mode: Mode?
         init(_ surface: PlayerGestureSurface) { self.surface = surface }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
             guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
             let velocity = pan.velocity(in: pan.view)
-            return abs(velocity.x) > abs(velocity.y)
+            return abs(velocity.x) + abs(velocity.y) > 0
         }
 
         @objc func tap(_ gesture: UITapGestureRecognizer) {
@@ -726,12 +613,39 @@ private struct PlayerGestureSurface: UIViewRepresentable {
         @objc func pan(_ gesture: UIPanGestureRecognizer) {
             switch gesture.state {
             case .began:
-                surface.onSeekBegan()
-                surface.onSeekChanged(gesture.translation(in: gesture.view).x, gesture.view?.bounds.width ?? 0)
+                let velocity = gesture.velocity(in: gesture.view)
+                if abs(velocity.x) > abs(velocity.y) {
+                    mode = .seek
+                    surface.onSeekBegan()
+                } else {
+                    let position = gesture.location(in: gesture.view)
+                    let translation = gesture.translation(in: gesture.view)
+                    let fraction = (position.x - translation.x) / max(gesture.view?.bounds.width ?? 1, 1)
+                    mode = fraction < 0.35 ? .brightness : (fraction > 0.65 ? .volume : .close)
+                    if mode == .brightness || mode == .volume { surface.onVerticalBegan(mode == .brightness) }
+                }
+                updatePan(gesture)
             case .changed:
-                surface.onSeekChanged(gesture.translation(in: gesture.view).x, gesture.view?.bounds.width ?? 0)
+                updatePan(gesture)
             case .ended, .cancelled, .failed:
-                surface.onSeekEnded()
+                if mode == .seek { surface.onSeekEnded() }
+                if mode == .brightness || mode == .volume { surface.onVerticalEnded() }
+                if mode == .close, gesture.state == .ended {
+                    let distance = gesture.translation(in: gesture.view).y
+                    if distance > 100 || (distance > 50 && gesture.velocity(in: gesture.view).y > 700) { surface.onClose() }
+                }
+                mode = nil
+            default: break
+            }
+        }
+
+        private func updatePan(_ gesture: UIPanGestureRecognizer) {
+            let translation = gesture.translation(in: gesture.view)
+            switch mode {
+            case .seek:
+                surface.onSeekChanged(translation.x, gesture.view?.bounds.width ?? 0)
+            case .brightness, .volume:
+                surface.onVerticalChanged(mode == .brightness, translation.y, gesture.view?.bounds.height ?? 0)
             default: break
             }
         }
@@ -752,6 +666,7 @@ private extension VLCPlayerViewController.VLCPlayerView {
         remoteCommands.configure(
             supportedPlaybackRates: playbackRates,
             play: {
+                guard !AppLockController.isAnySceneLocked else { return }
                 try? player.play()
                 refreshVideoAfterPausedSeekIfNeeded()
                 updateNowPlayingPlaybackState()
@@ -761,6 +676,7 @@ private extension VLCPlayerViewController.VLCPlayerView {
                 updateNowPlayingPlaybackState()
             },
             toggle: {
+                guard !AppLockController.isAnySceneLocked else { return }
                 togglePlayback()
             },
             seek: { time in
@@ -774,26 +690,6 @@ private extension VLCPlayerViewController.VLCPlayerView {
                 setPlaybackRate(rate)
             }
         )
-    }
-}
-
-// MARK: - Tracks
-private extension VLCPlayerViewController.VLCPlayerView {
-    func syncTracksFromPlayer() {
-        audioTracks = player.audioTracks
-        textTracks = player.subtitleTracks
-
-        if let selected = player.selectedAudioTrack {
-            selectedAudioTrack = selected
-        } else if selectedAudioTrack == nil {
-            selectedAudioTrack = audioTracks.first
-        }
-
-        if let selected = player.selectedSubtitleTrack {
-            selectedTextTrack = selected
-        } else if selectedTextTrack == nil {
-            selectedTextTrack = textTracks.first
-        }
     }
 }
 
@@ -853,45 +749,16 @@ private extension VLCPlayerViewController.VLCPlayerView {
 // MARK: - Foreground Restore
 private extension VLCPlayerViewController.VLCPlayerView {
     func restorePlaybackAfterForeground() {
-        guard didStartPlayback, !player.isPlaying, !isRestoringPlayback else { return }
-        let playbackTime = currentPlaybackTime
-        isRestoringPlayback = true
-        Task { @MainActor in
-            defer {
-                isRestoringPlayback = false
-                updateNowPlayingPlaybackState()
-            }
-            await player.stopAndWait()
-            try? player.play()
-            try? await Task.sleep(for: .milliseconds(200))
-            seek(to: playbackTime)
-            await scrubMinimallyForRestoredVideoFrame(around: playbackTime)
-            player.pause()
-            currentPlaybackTime = playbackTime
-        }
+        guard didStartPlayback, !isRestoringPlayback, wasPlayingBeforeBackground else { return }
+        guard !AppLockController.isAnySceneLocked else { return }
+        wasPlayingBeforeBackground = false
+        try? player.play()
+        player.isMuted = isMuted
+        setPlaybackRate(playbackRate)
+        refreshVideoAfterPausedSeekIfNeeded()
+        updateNowPlayingPlaybackState()
     }
 
-    private func scrubMinimallyForRestoredVideoFrame(around time: TimeInterval) async {
-        guard let scrubTime = minimalScrubTime(around: time) else { return }
-        try? await Task.sleep(for: .milliseconds(80))
-        seek(to: scrubTime, fast: true)
-        try? await Task.sleep(for: .milliseconds(80))
-        seek(to: time)
-    }
-
-    private func minimalScrubTime(around time: TimeInterval) -> TimeInterval? {
-        let duration = max(mediaTimeDuration, 0)
-        guard duration > 0 else { return nil }
-
-        let offset: TimeInterval = 0.05
-        if time + offset <= duration {
-            return time + offset
-        }
-        if time - offset >= 0 {
-            return time - offset
-        }
-        return nil
-    }
 }
 
 // MARK: - Now Playing

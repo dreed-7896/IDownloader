@@ -10,29 +10,34 @@ import MvvmFoundation
 import LibTorrent
 import SwiftVLC
 import UniformTypeIdentifiers
+import Combine
 
 extension VLCPlayerViewModel {
     struct Config {
         let url: URL
         let torrentPair: (handle: TorrentHandle, fileIndex: Int)?
+        var playlist: [URL] = []
     }
 }
 
 class VLCPlayerViewModel: BaseViewModelWith<VLCPlayerViewModel.Config>, ObservableObject {
-    private(set) var url: URL!
+    @Published private(set) var url: URL!
     private(set) var torrentPair: (handle: TorrentHandle, fileIndex: Int)?
 
     @Published var showOverlay: Bool = true
     @Published var segmentedProgress: [Double]?
+    @Published var isLandscape = true
+    @Published private(set) var playlistIndex = 0
+    private(set) var playlist: [URL] = []
+    let closeSignal = PassthroughSubject<Void, Never>()
+    let volumeSignal = PassthroughSubject<Float, Never>()
     private var playbackTeardownHandler: (() -> Void)?
-
-#if !os(visionOS)
-    @Published var pipController: PiPController?
-#endif
 
     override func prepare(with model: Config) {
         self.url = model.url
         self.torrentPair = model.torrentPair
+        playlist = model.playlist.isEmpty ? [model.url] : model.playlist
+        playlistIndex = playlist.firstIndex(of: model.url) ?? 0
         binding()
     }
 
@@ -49,6 +54,7 @@ class VLCPlayerViewModel: BaseViewModelWith<VLCPlayerViewModel.Config>, Observab
 
     private func refreshSegmentedProgress() {
         guard let torrentPair else { return }
+        guard torrentPair.handle.snapshot.files.indices.contains(torrentPair.fileIndex) else { return }
         let file = torrentPair.handle.snapshot.files[torrentPair.fileIndex]
         segmentedProgress = file.segmentedProgress
     }
@@ -65,6 +71,29 @@ class VLCPlayerViewModel: BaseViewModelWith<VLCPlayerViewModel.Config>, Observab
         let type = UTType(filenameExtension: url.pathExtension)
         return type?.conforms(to: .movie) == true || type?.conforms(to: .audio) == true
             || ["mkv", "avi", "webm", "flv", "wmv", "ts", "mts", "m2ts", "vob", "ogv", "m4v", "mp4", "mov", "mp3", "flac", "ogg", "opus"].contains(url.pathExtension.lowercased())
+    }
+
+    static func isVideoFile(_ url: URL) -> Bool {
+        UTType(filenameExtension: url.pathExtension)?.conforms(to: .movie) == true
+            || ["mkv", "avi", "webm", "flv", "wmv", "ts", "mts", "m2ts", "vob", "ogv", "m4v", "mp4", "mov"].contains(url.pathExtension.lowercased())
+    }
+
+    var hasPrevious: Bool { playlistIndex > 0 }
+    var hasNext: Bool { playlistIndex + 1 < playlist.count }
+
+    func moveInPlaylist(by offset: Int) {
+        var index = playlistIndex + offset
+        while playlist.indices.contains(index) {
+            let nextURL = playlist[index]
+            if Self.validateURL(nextURL) {
+                playlistIndex = index
+                torrentPair = nil
+                segmentedProgress = nil
+                url = nextURL
+                return
+            }
+            index += offset > 0 ? 1 : -1
+        }
     }
 
     static func canOpenInVLC(_ url: URL, timeoutMilliseconds: Int32 = 3_000) async -> Media? {

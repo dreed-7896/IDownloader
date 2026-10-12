@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        D0F11E002026101200000004 /* VideoGalleryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F11E002026101200000003 /* VideoGalleryViewController.swift */; };
+        D0F11E002026101200000006 /* AppLockController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F11E002026101200000005 /* AppLockController.swift */; };
         D0F11E002026101200000002 /* FileBrowserViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F11E002026101200000001 /* FileBrowserViewController.swift */; };
 		7C013DE32C28AA3C0026A11B /* silence.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7C013DE22C28A97F0026A11B /* silence.wav */; };
 		7C013DE42C2F38AA0026A11B /* LocalizationAttribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1352D1D2BBC2F7F00104E7B /* LocalizationAttribute.swift */; };
@@ -330,6 +332,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        D0F11E002026101200000003 /* VideoGalleryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iTorrent/Screens/FileBrowser/VideoGalleryViewController.swift"; sourceTree = SOURCE_ROOT; };
+        D0F11E002026101200000005 /* AppLockController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iTorrent/Services/AppLock/AppLockController.swift"; sourceTree = SOURCE_ROOT; };
         D0F11E002026101200000001 /* FileBrowserViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iTorrent/Screens/FileBrowser/FileBrowserViewController.swift"; sourceTree = SOURCE_ROOT; };
 		7C013DE22C28A97F0026A11B /* silence.wav */ = {isa = PBXFileReference; lastKnownFileType = file; path = silence.wav; sourceTree = "<group>"; };
 		7C1C08A92C31F2F000569B45 /* PauseTorrentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PauseTorrentIntent.swift; sourceTree = "<group>"; };
@@ -1345,6 +1349,8 @@
 		D1A226912AEEEFCC00669D6D = {
 			isa = PBXGroup;
 			children = (
+                D0F11E002026101200000003 /* VideoGalleryViewController.swift */,
+                D0F11E002026101200000005 /* AppLockController.swift */,
                 D0F11E002026101200000001 /* FileBrowserViewController.swift */,
 				D0F11E002026100800000001 /* FileDownloadService.swift */,
 				D0F11E002026100800000002 /* FileDownloadDetails.swift */,
@@ -1910,6 +1916,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                D0F11E002026101200000004 /* VideoGalleryViewController.swift in Sources */,
+                D0F11E002026101200000006 /* AppLockController.swift in Sources */,
                 D0F11E002026101200000002 /* FileBrowserViewController.swift in Sources */,
 				D0F11E00202610080000000B /* FileDownloadService.swift in Sources */,
 				D0F11E00202610080000000C /* FileDownloadDetails.swift in Sources */,
