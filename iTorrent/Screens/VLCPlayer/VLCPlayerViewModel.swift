@@ -11,6 +11,7 @@ import LibTorrent
 import SwiftVLC
 import UniformTypeIdentifiers
 import Combine
+import UIKit
 
 extension VLCPlayerViewModel {
     struct Config {
@@ -27,6 +28,7 @@ class VLCPlayerViewModel: BaseViewModelWith<VLCPlayerViewModel.Config>, Observab
     @Published var showOverlay: Bool = true
     @Published var segmentedProgress: [Double]?
     @Published var isLandscape = true
+    @Published var playerSafeAreaInsets: UIEdgeInsets = .zero
     @Published private(set) var playlistIndex = 0
     private(set) var playlist: [URL] = []
     let closeSignal = PassthroughSubject<Void, Never>()

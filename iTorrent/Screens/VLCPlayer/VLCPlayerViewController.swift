@@ -84,6 +84,7 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
 
         title = viewModel.url.lastPathComponent
         navigationItem.largeTitleDisplayMode = .never
+        overrideUserInterfaceStyle = .dark
 
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, options: [])
@@ -97,8 +98,8 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
         volumeView.alpha = 0.01
         view.addSubview(volumeView)
         disposeBag.bind {
-            viewModel.$showOverlay.sink { [weak self] show in
-                self?.navigationController?.setNavigationBarHidden(!show, animated: true)
+            viewModel.$showOverlay.sink { [weak self] _ in
+                self?.navigationController?.setNavigationBarHidden(true, animated: false)
             }
             viewModel.$url.sink { [weak self] url in self?.title = url?.lastPathComponent }
             viewModel.$isLandscape.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.rotatePlayer() }
@@ -114,6 +115,7 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(true, animated: false)
         navigationController?.setToolbarHidden(true, animated: false)
         originalBrightness = view.window?.windowScene?.screen.brightness ?? UIScreen.main.brightness
         originalOrientation = presentingViewController?.view.window?.windowScene?.interfaceOrientation
@@ -125,6 +127,16 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         rotatePlayer()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let insets = view.window?.safeAreaInsets ?? .zero
+        guard viewModel.playerSafeAreaInsets != insets else { return }
+        // Publish outside UIKit's layout pass to avoid invalidating SwiftUI mid-layout.
+        DispatchQueue.main.async { [weak self] in
+            self?.viewModel.playerSafeAreaInsets = insets
+        }
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -149,7 +161,7 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
 
     struct Body: View {
         @ObservedObject var viewModel: VLCPlayerViewModel
-        var body: some View { VLCPlayerView(viewModel: viewModel) }
+        var body: some View { VLCPlayerView(viewModel: viewModel).environment(\.colorScheme, .dark) }
     }
 
     struct VLCPlayerView: View {
@@ -167,6 +179,9 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
         @State private var gestureHUDIcon = "sun.max.fill"
         @State private var wasPlayingBeforeBackground = false
         @State private var playbackError: String?
+        @State private var fitMode: VideoFitMode = .fullWidth
+        @State private var subtitlesDisabled = false
+        @State private var preferredSubtitleLanguage: String?
         @State private var playbackRate: Float = 1
         @State private var didStartPlayback = false
         @State private var isRestoringPlayback = false
@@ -221,6 +236,22 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
     }
 }
 
+private enum VideoFitMode: Int, CaseIterable {
+    case fullWidth, safeWidth, fullHeight
+
+    var title: String {
+        switch self {
+        case .fullWidth: return "Full width"
+        case .safeWidth: return "Safe width"
+        case .fullHeight: return "Full height"
+        }
+    }
+
+    var next: VideoFitMode {
+        Self(rawValue: (rawValue + 1) % Self.allCases.count) ?? .fullWidth
+    }
+}
+
 // MARK: - Overlay State
 private extension VLCPlayerViewController.VLCPlayerView {
     var showOverlay: Bool { viewModel.showOverlay }
@@ -233,174 +264,257 @@ private extension VLCPlayerViewController.VLCPlayerView {
 // MARK: - Layout
 private extension VLCPlayerViewController.VLCPlayerView {
     var content: some View {
-        ZStack(alignment: .bottom) {
-            Color(showOverlay ? .systemGroupedBackground : .black)
-                .ignoresSafeArea()
-
-            videoOutput
-                .ignoresSafeArea()
-
-            if showOverlay {
-                Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-            }
-
-            PlayerGestureSurface(
-                onTap: {
-                    withAnimation(.easeInOut(duration: 0.28)) {
-                        viewModel.showOverlay.toggle()
-                    }
-                },
-                onSeekBegan: beginSwipeSeek,
-                onSeekChanged: updateSwipeSeek,
-                onSeekEnded: endSwipeSeek,
-                onHoldChanged: setHoldingDoubleSpeed,
-                onVerticalBegan: beginVerticalGesture,
-                onVerticalChanged: updateVerticalGesture,
-                onVerticalEnded: endVerticalGesture,
-                onClose: { viewModel.closeSignal.send() }
-            )
-                .ignoresSafeArea()
-
+        GeometryReader { geometry in
             ZStack {
-                CompatibilityGlassContainer(spacing: 24) {
-                    VStack {
-                        if showOverlay {
-                            overlayButtons
-                                .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                        }
-                    }
+                Color.black
+                videoOutput(in: geometry.size)
+                gestureSurface
+                if showOverlay {
+                    LinearGradient(colors: [.black.opacity(0.6), .clear, .clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                        .allowsHitTesting(false)
+                    overlayHeader
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    CompatibilityGlassContainer(spacing: 24) { overlayButtons }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    bottomControls
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .ignoresSafeArea()
-
-                CompatibilityGlassContainer(spacing: 16) {
-                    if showOverlay {
-                        VStack(alignment: .trailing, spacing: 16) {
-                            controlsBar
-
-                            TimelineView(
-                                mediaLengthTime: mediaTimeDuration,
-                                currentPlaybackTime: $currentPlaybackTime,
-                                isSeeking: $isSeeking,
-                                availability: viewModel.segmentedProgress,
-                                onScrubChanged: { time in
-                                    seek(to: time, fast: true)
-                                },
-                                onScrubEnded: { time in
-                                    seek(to: time, fast: false)
-                                }
-                            )
-                            .compatibilityGlassID("timeline", in: glassNamespace)
-                            .compatibilityGlassTransition()
-                        }
-                        .padding()
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                gestureIndicators
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
+        }
+        .ignoresSafeArea()
+    }
 
+    var gestureSurface: some View {
+        PlayerGestureSurface(
+            onTap: {
+                withAnimation(.easeInOut(duration: 0.2)) { viewModel.showOverlay.toggle() }
+            },
+            onSeekBegan: beginSwipeSeek,
+            onSeekChanged: updateSwipeSeek,
+            onSeekEnded: endSwipeSeek,
+            onHoldChanged: setHoldingDoubleSpeed,
+            onVerticalBegan: beginVerticalGesture,
+            onVerticalChanged: updateVerticalGesture,
+            onVerticalEnded: endVerticalGesture,
+            onClose: { viewModel.closeSignal.send() }
+        )
+    }
+
+    var overlayHeader: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(viewModel.url.lastPathComponent)
+                    .font(.headline)
+                    .lineLimit(1)
+                if viewModel.playlist.count > 1 {
+                    Text("\(viewModel.playlistIndex + 1) of \(viewModel.playlist.count)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            Spacer(minLength: 12)
+            Button { viewModel.closeSignal.send() } label: {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Close video")
+            .compatibilityGlassEffect(isClear: true, interactive: true)
+        }
+        .foregroundStyle(.white)
+        .padding(.leading, viewModel.playerSafeAreaInsets.left + 20)
+        .padding(.trailing, viewModel.playerSafeAreaInsets.right + 20)
+        .padding(.top, viewModel.playerSafeAreaInsets.top + 12)
+    }
+
+    var bottomControls: some View {
+        CompatibilityGlassContainer(spacing: 12) {
+            VStack(spacing: 10) {
+                TimelineView(
+                    mediaLengthTime: mediaTimeDuration,
+                    currentPlaybackTime: $currentPlaybackTime,
+                    isSeeking: $isSeeking,
+                    availability: viewModel.segmentedProgress,
+                    onScrubChanged: { seek(to: $0, fast: true) },
+                    onScrubEnded: { seek(to: $0, fast: false) }
+                )
+                .compatibilityGlassID("timeline", in: glassNamespace)
+                controlsBar
+            }
+        }
+        .padding(.leading, viewModel.playerSafeAreaInsets.left + 16)
+        .padding(.trailing, viewModel.playerSafeAreaInsets.right + 16)
+        .padding(.bottom, viewModel.playerSafeAreaInsets.bottom + 10)
+    }
+
+    var gestureIndicators: some View {
+        ZStack {
             if swipeSeekStart != nil {
                 VStack(spacing: 8) {
-                    Label("\(swipeSeekOffset >= 0 ? "+" : "−")\(Int(abs(swipeSeekOffset)))s",
-                          systemImage: swipeSeekOffset >= 0 ? "goforward" : "gobackward")
+                    Label("\(swipeSeekOffset >= 0 ? "+" : "−")\(Int(abs(swipeSeekOffset)))s", systemImage: swipeSeekOffset >= 0 ? "goforward" : "gobackward")
                         .font(.title2.weight(.semibold))
-                    Text(playbackTimeLabel(currentPlaybackTime))
-                        .font(.headline.monospacedDigit())
+                    Text(playbackTimeLabel(currentPlaybackTime)).font(.headline.monospacedDigit())
                 }
-                .foregroundStyle(.white)
                 .padding(24)
                 .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .allowsHitTesting(false)
             }
-
             if isHoldingDoubleSpeed {
                 Label("2× Speed", systemImage: "forward.fill")
                     .font(.headline)
-                    .foregroundStyle(.white)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
                     .background(.black.opacity(0.7), in: Capsule())
-                    .padding(.top, 16)
+                    .padding(.top, viewModel.playerSafeAreaInsets.top + 16)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .allowsHitTesting(false)
             }
-
             if let gestureHUD {
                 Label(gestureHUD, systemImage: gestureHUDIcon)
                     .font(.headline.monospacedDigit())
-                    .foregroundStyle(.white)
                     .padding(20)
                     .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .allowsHitTesting(false)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .foregroundStyle(.white)
+        .allowsHitTesting(false)
     }
 
     var controlsBar: some View {
-        HStack {
-            HStack(spacing: 20) {
-                PlaybackRateMenuView(rates: playbackRates, selectedRate: $playbackRate)
-                Button {
-                    isMuted.toggle()
-                } label: {
-                    Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                }
-                .accessibilityLabel(isMuted ? "Unmute" : "Mute")
-            }
-            .padding(.horizontal)
-            .frame(height: 44)
-            .compatibilityGlassEffect(interactive: true)
-            Spacer()
-            if viewModel.playlist.count > 1 {
-                HStack(spacing: 20) {
-                    Button { viewModel.moveInPlaylist(by: -1) } label: { Image(systemName: "backward.end.fill") }
-                        .disabled(!viewModel.hasPrevious).accessibilityLabel("Previous video")
-                    Button { viewModel.moveInPlaylist(by: 1) } label: { Image(systemName: "forward.end.fill") }
-                        .disabled(!viewModel.hasNext).accessibilityLabel("Next video")
-                }
-                .padding(.horizontal)
-                .frame(height: 44)
-                .compatibilityGlassEffect(interactive: true)
-            }
-            Button { viewModel.isLandscape.toggle() } label: {
-                Image(systemName: "rotate.right")
+        HStack(spacing: 10) {
+            PlaybackRateMenuView(rates: playbackRates, selectedRate: $playbackRate)
+                .frame(width: 44, height: 44)
+                .compatibilityGlassEffect(isClear: true, interactive: true)
+            Button { isMuted.toggle() } label: {
+                Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .frame(width: 44, height: 44)
             }
+            .accessibilityLabel(isMuted ? "Unmute" : "Mute")
+            .compatibilityGlassEffect(isClear: true, interactive: true)
+            subtitleControl
+            Spacer(minLength: 0)
+            Button { fitMode = fitMode.next } label: {
+                ViewThatFits(in: .horizontal) {
+                    Label(fitMode.title, systemImage: "aspectratio")
+                        .font(.subheadline.weight(.semibold))
+                        .fixedSize()
+                        .padding(.horizontal, 12)
+                    Image(systemName: "aspectratio").frame(width: 44)
+                }
+                .frame(height: 44)
+            }
+            .accessibilityLabel("Video fit: \(fitMode.title). Tap for \(fitMode.next.title).")
+            .compatibilityGlassEffect(isClear: true, interactive: true)
+            Button { viewModel.isLandscape.toggle() } label: {
+                Image(systemName: "rotate.right").frame(width: 44, height: 44)
+            }
             .accessibilityLabel(viewModel.isLandscape ? "Rotate to portrait" : "Rotate to landscape")
-            .compatibilityGlassEffect(interactive: true)
+            .compatibilityGlassEffect(isClear: true, interactive: true)
         }
         .tint(.white)
-        .font(.title3.weight(.semibold))
+        .font(.title3.weight(.medium))
+    }
+
+    var subtitleControl: some View {
+        Menu {
+            Toggle("Off", isOn: Binding(get: { player.selectedSubtitleTrack == nil }, set: { enabled in
+                guard enabled else { return }
+                subtitlesDisabled = true
+                preferredSubtitleLanguage = nil
+                player.selectedSubtitleTrack = nil
+            }))
+            if player.subtitleTracks.isEmpty {
+                Text("No subtitles available")
+            } else {
+                ForEach(player.subtitleTracks) { track in
+                    Toggle(subtitleTitle(track), isOn: Binding(get: { player.selectedSubtitleTrack?.id == track.id }, set: { enabled in
+                        guard enabled else { return }
+                        subtitlesDisabled = false
+                        preferredSubtitleLanguage = track.language
+                        player.selectedSubtitleTrack = track
+                    }))
+                }
+            }
+        } label: {
+            Image(systemName: "captions.bubble")
+                .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("Subtitles")
+        .compatibilityGlassEffect(isClear: true, interactive: true)
     }
 
     var overlayButtons: some View {
         HStack(spacing: 32) {
-            PlayerButton(size: .small, imageName: "10.arrow.trianglehead.counterclockwise") {
-                skip(by: -10)
+            PlayerButton(size: .small, imageName: "backward.end.fill") {
+                viewModel.moveInPlaylist(by: -1)
             }
-            .compatibilityGlassID("backward", in: glassNamespace)
+            .disabled(!viewModel.hasPrevious)
+            .opacity(viewModel.hasPrevious ? 1 : 0.35)
+            .accessibilityLabel("Previous video")
+            .compatibilityGlassID("previous", in: glassNamespace)
 
             PlayerButton(size: .big, imageName: showsPlayingState ? "pause.fill" : "play.fill") {
                 guard !isRestoringPlayback else { return }
                 togglePlayback()
             }
+            .accessibilityLabel(showsPlayingState ? "Pause" : "Play")
             .compatibilityGlassID("playPause", in: glassNamespace)
 
-            PlayerButton(size: .small, imageName: "10.arrow.trianglehead.clockwise") {
-                skip(by: 10)
+            PlayerButton(size: .small, imageName: "forward.end.fill") {
+                viewModel.moveInPlaylist(by: 1)
             }
-            .compatibilityGlassID("forward", in: glassNamespace)
+            .disabled(!viewModel.hasNext)
+            .opacity(viewModel.hasNext ? 1 : 0.35)
+            .accessibilityLabel("Next video")
+            .compatibilityGlassID("next", in: glassNamespace)
         }
     }
 }
 
+// MARK: - Video Fit and Subtitles
 private extension VLCPlayerViewController.VLCPlayerView {
-    var videoOutput: some View { VideoView(player) }
+    var videoAspect: CGFloat {
+        if let size = player.videoSize, size.width > 0, size.height > 0 {
+            return size.width / size.height
+        }
+        if let track = player.videoTracks.first, let width = track.width, let height = track.height, width > 0, height > 0 {
+            return CGFloat(width) / CGFloat(height)
+        }
+        return 16 / 9
+    }
+
+    func videoOutput(in screen: CGSize) -> some View {
+        let insets = viewModel.playerSafeAreaInsets
+        let safe = fitMode == .safeWidth
+        let width = max(1, screen.width - (safe ? insets.left + insets.right : 0))
+        let height = max(1, screen.height - (safe ? insets.top + insets.bottom : 0))
+        let videoWidth = fitMode == .fullHeight ? height * videoAspect : width
+        let videoHeight = fitMode == .fullHeight ? height : width / videoAspect
+        return VideoView(player)
+            .frame(width: videoWidth, height: videoHeight)
+            .frame(width: width, height: height, alignment: .center)
+            .clipped()
+            .position(x: (safe ? insets.left : 0) + width / 2, y: (safe ? insets.top : 0) + height / 2)
+    }
+
+    func subtitleTitle(_ track: Track) -> String {
+        let name = track.trackDescription ?? track.name
+        guard let language = track.language,
+              let title = Locale.current.localizedString(forLanguageCode: language),
+              !name.localizedCaseInsensitiveContains(title) else { return name }
+        return "\(name) · \(title)"
+    }
+
+    func applySubtitlePreference() {
+        if subtitlesDisabled {
+            if player.selectedSubtitleTrack != nil { player.selectedSubtitleTrack = nil }
+        } else if let language = preferredSubtitleLanguage,
+                  player.selectedSubtitleTrack?.language != language,
+                  let track = player.subtitleTracks.first(where: { $0.language == language }) {
+            player.selectedSubtitleTrack = track
+        }
+    }
 }
 
 // MARK: - Playback Lifecycle
@@ -428,6 +542,7 @@ private extension VLCPlayerViewController.VLCPlayerView {
             didStartPlayback = true
             player.isMuted = isMuted
             setPlaybackRate(playbackRate)
+            applySubtitlePreference()
             updateNowPlayingPlaybackState()
         } catch is CancellationError {
             if viewModel.url == url { player.stop() }
@@ -451,7 +566,10 @@ private extension VLCPlayerViewController.VLCPlayerView {
             case .lengthChanged(let duration):
                 updateMediaTimeDuration(duration.timeInterval)
                 updateNowPlaying(duration: duration.timeInterval)
+            case .tracksChanged, .mediaChanged:
+                applySubtitlePreference()
             case .stateChanged:
+                applySubtitlePreference()
                 updateNowPlayingPlaybackState()
             case .encounteredError:
                 playbackError = "This file could not be played. It may be incomplete or use an unsupported format."
@@ -802,18 +920,18 @@ private extension VLCPlayerViewController.VLCPlayerView {
             var view: Double {
                 switch self {
                 case .small:
-                    62
+                    52
                 case .big:
-                    92
+                    76
                 }
             }
 
             var font: Double {
                 switch self {
                 case .small:
-                    32
+                    24
                 case .big:
-                    46
+                    34
                 }
             }
         }
