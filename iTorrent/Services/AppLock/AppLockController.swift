@@ -1,5 +1,5 @@
 import Combine
-import LocalAuthentication
+@preconcurrency import LocalAuthentication
 import LibTorrent
 import UIKit
 
@@ -131,19 +131,19 @@ final class AppLockController {
         self.context = context
         authenticationInProgress = true
         context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Pulled to access your downloads.") { [weak self] success, error in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.context === context else { return }
                 self.context = nil
-                authenticationInProgress = false
+                self.authenticationInProgress = false
                 if success {
-                    hasUnlocked = true
-                    awaySince = nil
-                    if mainWindow?.windowScene?.activationState == .foregroundActive {
-                        hideCover()
+                    self.hasUnlocked = true
+                    self.awaySince = nil
+                    if self.mainWindow?.windowScene?.activationState == .foregroundActive {
+                        self.hideCover()
                         NotificationCenter.default.post(name: .appDidUnlock, object: nil)
                     }
                 } else {
-                    (coverWindow?.rootViewController as? LockScreenViewController)?.showError(error?.localizedDescription ?? "Authentication failed. Try again.")
+                    (self.coverWindow?.rootViewController as? LockScreenViewController)?.showError(error?.localizedDescription ?? "Authentication failed. Try again.")
                 }
             }
         }
@@ -258,17 +258,17 @@ final class AppLockSettingsViewController: UITableViewController, ToolbarHidingP
         tableView.reloadData()
         NotificationCenter.default.post(name: .appLockConfigurationAuthentication, object: true)
         context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: enabled ? "Enable app lock for Pulled." : "Turn off app lock for Pulled.") { [weak self] success, error in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
-                authenticating = false
+                self.authenticating = false
                 self.context = nil
                 if success {
-                    preferences.appLockEnabled = enabled
+                    self.preferences.appLockEnabled = enabled
                     NotificationCenter.default.post(name: .appLockSettingsChanged, object: nil, userInfo: ["authenticated": true])
                 }
                 NotificationCenter.default.post(name: .appLockConfigurationAuthentication, object: false)
-                tableView.reloadData()
-                if !success, let error { showError(error.localizedDescription) }
+                self.tableView.reloadData()
+                if !success, let error { self.showError(error.localizedDescription) }
             }
         }
     }

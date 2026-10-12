@@ -97,11 +97,11 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
         let excluded = incomplete
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let found = Self.scan(roots: scanRoots, excluded: excluded)
-            DispatchQueue.main.async {
-                guard let self, scanGeneration == generation else { return }
-                videos = found
-                applyFilter()
-                collectionView.refreshControl?.endRefreshing()
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.scanGeneration == generation else { return }
+                self.videos = found
+                self.applyFilter()
+                self.collectionView.refreshControl?.endRefreshing()
             }
         }
     }
