@@ -125,12 +125,12 @@ final class AppLockController {
         context.localizedCancelTitle = "Cancel"
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            (coverWindow?.rootViewController as? LockScreenViewController)?.showError(error?.localizedDescription ?? "Set a device passcode to unlock Pulled.")
+            (coverWindow?.rootViewController as? LockScreenViewController)?.showError(error?.localizedDescription ?? "Set a device passcode to unlock Stash.")
             return
         }
         self.context = context
         authenticationInProgress = true
-        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Pulled to access your downloads.") { [weak self] success, error in
+        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Stash to access your downloads.") { [weak self] success, error in
             Task { @MainActor [weak self] in
                 guard let self, self.context === context else { return }
                 self.context = nil
@@ -162,7 +162,7 @@ private final class LockScreenViewController: UIViewController {
         icon.tintColor = .secondaryLabel
         icon.heightAnchor.constraint(equalToConstant: 64).isActive = true
         let title = UILabel()
-        title.text = "Pulled is locked"
+        title.text = "Stash is locked"
         title.font = .preferredFont(forTextStyle: .title2)
         title.textAlignment = .center
         detail.text = "Authenticate to access your downloads and files."
@@ -257,7 +257,7 @@ final class AppLockSettingsViewController: UITableViewController, ToolbarHidingP
         authenticating = true
         tableView.reloadData()
         NotificationCenter.default.post(name: .appLockConfigurationAuthentication, object: true)
-        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: enabled ? "Enable app lock for Pulled." : "Turn off app lock for Pulled.") { [weak self] success, error in
+        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: enabled ? "Enable app lock for Stash." : "Turn off app lock for Stash.") { [weak self] success, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.authenticating = false

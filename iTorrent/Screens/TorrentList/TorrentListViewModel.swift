@@ -57,7 +57,7 @@ class TorrentListViewModel: BaseViewModel {
 
     required init() {
         super.init()
-        title = "Pulled"
+        title = "Stash"
 
         filterButtons = [%"common.all"] + TorrentHandle.State.filterArray.map { Self.filterTitle($0) }
 

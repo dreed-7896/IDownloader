@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>NSFaceIDUsageDescription</key>
-    <string>Use Face ID to unlock Pulled and protect your downloaded files.</string>
+    <string>Use Face ID to unlock Stash and protect your downloaded files.</string>
 	<key>CFBundleName</key>
-	<string>Pulled</string>
+	<string>Stash</string>
 	<key>CFBundleDisplayName</key>
-	<string>Pulled</string>
+	<string>Stash</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.dreed7896.IDownloader.refresh</string>
@@ -48,6 +48,7 @@
 			<string>com.dreed7896.IDownloader.links</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>stash</string>
 				<string>Pulled</string>
 				<string>IDownloader</string>
 			</array>

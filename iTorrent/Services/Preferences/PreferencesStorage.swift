@@ -104,7 +104,7 @@ class PreferencesStorage: Resolvable {
     @UserDefaultItem("preferencesProxyPeerConnections", true) var proxyPeerConnections: Bool
 
     #if !os(tvOS)
-    @UserDefaultItem("preferencesApplicationAppearance", .unspecified) var appAppearance: UIUserInterfaceStyle
+    @UserDefaultItem("preferencesApplicationAppearance", .dark) var appAppearance: UIUserInterfaceStyle
     @NSUserDefaultItem("preferencesTintColor", .accent) var tintColor: UIColor
     #endif
 
@@ -170,7 +170,7 @@ extension Session.Settings {
         let preferences = PreferencesStorage.shared
 
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
-        settings.agentName = "Pulled/\(appVersion)"
+        settings.agentName = "Stash/\(appVersion)"
         settings.peerFingerprint = peerFingerprint(for: appVersion)
 
         settings.maxActiveTorrents = -1

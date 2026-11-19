@@ -583,6 +583,7 @@
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7C92760D2F7C321A0081CA19 /* AirPlay */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = AirPlay; sourceTree = "<group>"; };
+		5A5A5A5A2F00000000000001 /* Stash */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Stash; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1380,6 +1381,7 @@
 		D1A2269C2AEEEFCC00669D6D /* iTorrent */ = {
 			isa = PBXGroup;
 			children = (
+				5A5A5A5A2F00000000000001 /* Stash */,
 				D19E00232AF045DA000A17A2 /* Utils */,
 				D1A226FB2AEF04EE00669D6D /* Base */,
 				D1A226F02AEF018500669D6D /* Services */,
@@ -1735,6 +1737,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				7C92760D2F7C321A0081CA19 /* AirPlay */,
+				5A5A5A5A2F00000000000001 /* Stash */,
 			);
 			name = iTorrent;
 			packageProductDependencies = (
@@ -2265,11 +2268,11 @@
 				DEVELOPMENT_TEAM = D59DHVRS87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iTorrent/Core/Assets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Pulled;
-				INFOPLIST_KEY_CFBundleName = Pulled;
+				INFOPLIST_KEY_CFBundleDisplayName = Stash;
+				INFOPLIST_KEY_CFBundleName = Stash;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Pulled uses the local network to discover playback devices and cast video on your network.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Stash uses the local network to discover playback devices and cast video on your network.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -2417,11 +2420,11 @@
 				"DEVELOPMENT_TEAM[sdk=xros*]" = D59DHVRS87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iTorrent/Core/Assets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Pulled;
-				INFOPLIST_KEY_CFBundleName = Pulled;
+				INFOPLIST_KEY_CFBundleDisplayName = Stash;
+				INFOPLIST_KEY_CFBundleName = Stash;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Pulled uses the local network to discover playback devices and cast video on your network.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Stash uses the local network to discover playback devices and cast video on your network.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -2669,11 +2672,11 @@
 				DEVELOPMENT_TEAM = D59DHVRS87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iTorrent/Core/Assets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Pulled;
-				INFOPLIST_KEY_CFBundleName = Pulled;
+				INFOPLIST_KEY_CFBundleDisplayName = Stash;
+				INFOPLIST_KEY_CFBundleName = Stash;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Pulled uses the local network to discover playback devices and cast video on your network.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Stash uses the local network to discover playback devices and cast video on your network.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
