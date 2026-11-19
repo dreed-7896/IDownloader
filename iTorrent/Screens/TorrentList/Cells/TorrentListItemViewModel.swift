@@ -9,7 +9,16 @@ class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectable
     var selectAction: (() -> Void)?
     var id: String { fileID?.uuidString ?? torrentHandle.snapshot.infoHashes.best.hex }
     var isFile: Bool { fileID != nil }
-    var kindIcon: String { isFile ? "arrow.down.circle.fill" : "network" }
+    var kindIcon: String {
+        guard isFile else { return "point.3.connected.trianglepath.dotted" }
+        let ext = (file?.name as NSString?)?.pathExtension.lowercased() ?? ""
+        if ThumbnailProvider.videoExtensions.contains(ext) { return "film" }
+        if ["mp3", "m4a", "aac", "flac", "wav", "ogg", "opus"].contains(ext) { return "waveform" }
+        if ["jpg", "jpeg", "png", "gif", "webp", "heic"].contains(ext) { return "photo" }
+        if ["zip", "rar", "7z", "gz", "tar", "xz"].contains(ext) { return "shippingbox" }
+        if file?.state == .failed, file?.page == file?.url { return "safari" }
+        return "doc"
+    }
     var file: FileDownload? { FileDownloadService.shared.downloads.first { $0.id == fileID } }
     var listState: TorrentHandle.State {
         if isFile { return file?.listState ?? .finished }
@@ -29,6 +38,10 @@ class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectable
     @Published var statusText = ""
     @Published var progress: Double = 0
     @Published var connections: [Double] = [0]
+    @Published var stateLabel = ""
+    @Published var stateColor = Color.sText
+    @Published var metaText = ""
+    @Published var detailText = ""
 
     convenience init(fileID: UUID) {
         self.init()
@@ -91,12 +104,39 @@ class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectable
                 statusText += " - ↓ \(file.speed.bitrateToHumanReadable)/s - \(file.timeRemaining)"
             } else if file.state == .failed, let error = file.error { statusText += " - \(error)" }
             connections = FileDownloadService.shared.connections(fileID).map(\.progress)
+            stateLabel = file.stateTitle
+            switch file.state {
+            case .completed: stateColor = .sMint
+            case .failed: stateColor = .sCoral
+            case .paused, .queued: stateColor = .sAmber
+            default: stateColor = .sText
+            }
+            let host = file.page?.host ?? file.url.host ?? ""
+            if file.state == .downloading {
+                metaText = "\(Int(progress * 100))% · \(file.speed.bitrateToHumanReadable)/s · \(file.timeRemaining)"
+            } else if file.state == .completed {
+                metaText = [total, host].filter { !$0.isEmpty && $0 != "Unknown size" }.joined(separator: " · ")
+            } else {
+                metaText = file.totalBytes > 0 ? "\(received) / \(total)" : host
+            }
+            detailText = file.state == .failed ? (file.error ?? "") : ""
         } else {
             let snapshot = torrentHandle.snapshot
             title = snapshot.name
             progress = snapshot.progress
             progressText = "\(snapshot.totalWantedDone.bitrateToHumanReadable) of \(snapshot.totalWanted.bitrateToHumanReadable) (\(String(format: "%.2f", progress * 100))%)"
-            statusText = DownloadQueue.shared.isQueued(torrentHandle) ? "Queued" : snapshot.stateText
+            let queued = DownloadQueue.shared.isQueued(torrentHandle)
+            statusText = queued ? "Queued" : snapshot.stateText
+            stateLabel = queued ? "Queued" : snapshot.friendlyState.name
+            switch snapshot.friendlyState {
+            case .finished, .seeding: stateColor = .sMint
+            case .storageError: stateColor = .sCoral
+            case .paused: stateColor = .sAmber
+            default: stateColor = queued ? .sAmber : .sText
+            }
+            let speed = snapshot.downloadRate > 0 ? " · ↓ \(snapshot.downloadRate.bitrateToHumanReadable)/s" : ""
+            metaText = "\(Int(progress * 100))% · \(snapshot.totalWantedDone.bitrateToHumanReadable) / \(snapshot.totalWanted.bitrateToHumanReadable)\(speed)"
+            detailText = ""
         }
     }
 }

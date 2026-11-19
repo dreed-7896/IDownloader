@@ -279,6 +279,7 @@
 		D0F11E00202610080000000C /* FileDownloadDetails.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000002 /* FileDownloadDetails.swift */; };
 		D0F11E00202610080000000D /* SharedDownloadInbox.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000003 /* SharedDownloadInbox.swift */; };
 		D0F11E00202610080000000E /* ShareViewController.swift in Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000004 /* ShareViewController.swift */; };
+		5A5A5A5A2F00000000000003 /* StashPage.js in Share Resources */ = { isa = PBXBuildFile; fileRef = 5A5A5A5A2F00000000000002 /* StashPage.js */; };
 		D0F11E00202610080000000F /* SharedDownloadInbox.swift in Share Sources */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000003; };
 		D0F11E002026100800000010 /* ShareExtension.appex in Embed Foundation Extensions */ = { isa = PBXBuildFile; fileRef = D0F11E002026100800000007; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -577,6 +578,7 @@
 		D0F11E002026100800000003 /* SharedDownloadInbox.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/SharedDownloadInbox.swift"; sourceTree = SOURCE_ROOT; };
 		D0F11E002026100800000004 /* ShareViewController.swift */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShareExtension/ShareViewController.swift"; sourceTree = SOURCE_ROOT; };
 		D0F11E002026100800000005 /* Info.plist */ = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "ShareExtension/Info.plist"; sourceTree = SOURCE_ROOT; };
+		5A5A5A5A2F00000000000002 /* StashPage.js */ = { isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "ShareExtension/StashPage.js"; sourceTree = SOURCE_ROOT; };
 		D0F11E002026100800000006 /* ShareExtension.entitlements */ = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "ShareExtension/ShareExtension.entitlements"; sourceTree = SOURCE_ROOT; };
 		D0F11E002026100800000007 /* ShareExtension.appex */ = { isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -1359,6 +1361,7 @@
 				D0F11E002026100800000004 /* ShareViewController.swift */,
 				D0F11E002026100800000005 /* Info.plist */,
 				D0F11E002026100800000006 /* ShareExtension.entitlements */,
+				5A5A5A5A2F00000000000002 /* StashPage.js */,
 				D10257C52EE8619300201640 /* iTorrent-TV */,
 				D1A2269C2AEEEFCC00669D6D /* iTorrent */,
 				7C5FBE402BC0ADC90069E5A0 /* ProgressWidget */,
@@ -1862,7 +1865,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D0F11E002026100800000016 /* Share Resources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		D0F11E002026100800000016 /* Share Resources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (5A5A5A5A2F00000000000003, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */

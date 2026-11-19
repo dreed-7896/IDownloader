@@ -20,6 +20,10 @@ struct FileDownload: Codable, Identifiable {
     var completedParts: [Int] = []
     var error: String?
     var createdAt = Date()
+    /// The web page this download came from. Kept so an expired link can be fetched again.
+    var page: URL?
+    /// The page title, when known.
+    var title: String?
     var progress: Double { totalBytes > 0 ? min(1, Double(receivedBytes) / Double(totalBytes)) : 0 }
     var isActive: Bool { [.preparing, .downloading, .assembling].contains(state) }
     var queueEligible: Bool { isActive || state == .queued }
@@ -67,7 +71,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
     private var assembling = Set<UUID>()
     private var pendingAssemblies = 0
     private var backgroundEventsFinished = false
-    private let ioQueue = DispatchQueue(label: "Pulled.files.assembly", qos: .utility)
+    private let ioQueue = DispatchQueue(label: "Stash.files.assembly", qos: .utility)
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
         config.isDiscretionary = false
@@ -118,19 +122,82 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
     }
 
     @discardableResult
-    func add(_ url: URL) -> UUID? {
+    func add(_ url: URL, page: URL? = nil, title: String? = nil) -> UUID? {
         guard ["http", "https"].contains(url.scheme?.lowercased()), url.host != nil else { return nil }
         if let existing = downloads.first(where: { $0.url == url && $0.state != .completed }) {
+            if let index = index(existing.id), downloads[index].page == nil, let page {
+                downloads[index].page = page
+                downloads[index].title = downloads[index].title ?? title
+                publish(existing.id)
+            }
             if [.paused, .failed].contains(existing.state) { resume(existing.id) }
             DownloadQueue.shared.startPendingDownloads()
             return existing.id
         }
         let item = FileDownload(url: url, name: url.lastPathComponent.isEmpty ? "Download" : url.lastPathComponent,
-                                state: .queued, requestedParts: min(16, max(1, PreferencesStorage.shared.fileDownloadParts)))
+                                state: .queued, requestedParts: min(16, max(1, PreferencesStorage.shared.fileDownloadParts)),
+                                page: page == url ? nil : page, title: title)
         downloads.insert(item, at: 0)
         publish(item.id)
         DownloadQueue.shared.startPendingDownloads()
         return item.id
+    }
+
+    /// Adds a shared link. A web page is searched for its video, so sharing a page saves the video
+    /// and remembers the page. A page without a downloadable video is listed as failed with its website.
+    @MainActor @discardableResult
+    func add(_ link: SharedLink) async -> UUID? {
+        let url = link.url
+        guard ["http", "https"].contains(url.scheme?.lowercased()), url.host != nil else { return nil }
+        let page = link.page ?? (PageMediaResolver.looksLikeFile(url) ? nil : url)
+        // A direct file link (or a video the share already found on its page) downloads as is.
+        if PageMediaResolver.looksLikeFile(url) || (link.page != nil && link.page != url) {
+            return add(url, page: link.page, title: link.title)
+        }
+        let result = await PageMediaResolver.resolve(page ?? url)
+        guard result.isPage else { return add(url, page: link.page, title: link.title) }
+        if let media = result.media { return add(media, page: page, title: link.title ?? result.title) }
+        if let existing = downloads.first(where: { $0.url == url && $0.state == .failed }) { return existing.id }
+        var item = FileDownload(url: url, name: link.title ?? result.title ?? url.host ?? "Web page", state: .failed,
+                                requestedParts: 1, page: url, title: link.title ?? result.title)
+        item.error = "No downloadable video was found on this page. Open the website, start the video, then share again."
+        downloads.insert(item, at: 0)
+        publish(item.id)
+        return item.id
+    }
+
+    /// Looks for the video on the download's website again and restarts it from the fresh link.
+    @MainActor
+    func refetchFromWebsite(_ id: UUID) async -> String? {
+        guard let page = downloads.first(where: { $0.id == id })?.page else { return "This download has no website saved." }
+        let result = await PageMediaResolver.resolve(page)
+        guard let media = result.media else {
+            return result.isPage ? "No downloadable video was found on the website." : "The website could not be loaded."
+        }
+        replaceSource(id, with: media)
+        return nil
+    }
+
+    /// Restarts a download from `url`, keeping its website and place in the list.
+    func replaceSource(_ id: UUID, with url: URL) {
+        guard let index = index(id) else { return }
+        if downloads[index].state == .completed, let file = fileURL(id) { try? FileManager.default.removeItem(at: file) }
+        downloads[index].generation = UUID()
+        cancelTasks(id)
+        try? FileManager.default.removeItem(at: directory(id))
+        downloads[index].url = url
+        downloads[index].completedParts = []
+        downloads[index].receivedBytes = 0
+        downloads[index].totalBytes = 0
+        downloads[index].parts = 1
+        downloads[index].speed = 0
+        downloads[index].error = nil
+        downloads[index].validator = nil
+        downloads[index].requestedParts = min(16, max(1, PreferencesStorage.shared.fileDownloadParts))
+        downloads[index].state = .queued
+        samples[id] = nil
+        publish(id)
+        DownloadQueue.shared.startPendingDownloads()
     }
 
     func pause(_ id: UUID) {
@@ -143,6 +210,16 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
 
     func resume(_ id: UUID) {
         guard let index = index(id), [.paused, .failed].contains(downloads[index].state) else { return }
+        // A web page with no video found: look on the page again instead of saving its HTML.
+        if downloads[index].page != nil, downloads[index].page == downloads[index].url {
+            Task { @MainActor in
+                if let message = await self.refetchFromWebsite(id), let index = self.index(id) {
+                    self.downloads[index].error = message
+                    self.publish(id)
+                }
+            }
+            return
+        }
         downloads[index].state = .queued
         downloads[index].error = nil
         publish(id)

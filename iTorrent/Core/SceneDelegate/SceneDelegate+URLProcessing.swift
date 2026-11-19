@@ -10,17 +10,18 @@ import MvvmFoundation
 import UIKit
 
 extension SceneDelegate {
-    func processURL(_ url: URL) {
+    func processURL(_ url: URL, page: URL? = nil, title: String? = nil) {
         Task { @MainActor in
             let application = UIApplication.shared
             let startupTask = application.beginBackgroundTask(withName: "Start shared download", expirationHandler: nil)
             defer {
                 if startupTask != .invalid { application.endBackgroundTask(startupTask) }
             }
-            if ["pulled", "idownloader"].contains(url.scheme?.lowercased() ?? ""), url.host == "shared" {
+            if ["stash", "pulled", "idownloader"].contains(url.scheme?.lowercased() ?? ""), url.host == "shared" {
                 let links = SharedDownloadInbox.links(from: url)
-                if links.isEmpty { consumeSharedLinks() }
-                else { links.forEach { processURL($0) } }
+                let page = SharedDownloadInbox.page(from: url)
+                consumeSharedLinks()
+                links.forEach { processURL($0, page: page) }
                 return
             }
             let filePrefix = url.absoluteString.hasPrefix("IDownloader:hash:file-") ? "IDownloader:hash:file-" : "Pulled:hash:file-"
@@ -35,7 +36,7 @@ extension SceneDelegate {
                 startSharedDownloads()
                 return
             }
-            if let id = FileDownloadService.shared.add(url) {
+            if let id = await FileDownloadService.shared.add(SharedLink(url: url, page: page, title: title)) {
                 startSharedDownloads()
                 showFileDownloads(selected: id)
             }
@@ -43,7 +44,7 @@ extension SceneDelegate {
     }
 
     func consumeSharedLinks() {
-        SharedDownloadInbox.consume { processURL($0) }
+        SharedDownloadInbox.consume { processURL($0.url, page: $0.page, title: $0.title) }
     }
 
     private func startSharedDownloads() {

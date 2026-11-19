@@ -15,29 +15,46 @@ struct TorrentListItemView: MvvmSwiftUICellProtocol {
     @ObservedObject var viewModel: TorrentListItemViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: viewModel.kindIcon)
-                    .foregroundStyle(.tint)
-                    .accessibilityLabel(viewModel.isFile ? "File download" : "Torrent")
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: viewModel.kindIcon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(viewModel.isFile ? Color.sMint : Color.sAmber)
+                .frame(width: 40, height: 40)
+                .background(Color.sS2)
+                .overlay(Rectangle().strokeBorder(Color.sLine, lineWidth: 1))
+                .accessibilityLabel(viewModel.isFile ? "File download" : "Torrent")
+            VStack(alignment: .leading, spacing: 6) {
                 Text(viewModel.title)
-                    .foregroundStyle(.primary)
-                    .font(.subheadline.weight(.semibold))
-            }
-            VStack(alignment: .leading, spacing: 0) {
-                Text(String(viewModel.progressText))
-                Text(String(viewModel.statusText))
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-            .foregroundStyle(.secondary)
-            .font(.footnote)
-            if viewModel.isFile {
-                ConnectionProgressStrip(progress: viewModel.connections)
-            } else {
-                ProgressView(value: viewModel.progress)
+                    .font(.sInter(15, .semibold))
+                    .foregroundStyle(Color.sText)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(viewModel.stateLabel)
+                        .font(.sMono(10, .bold))
+                        .textCase(.uppercase)
+                        .foregroundStyle(Color.sOnAccent)
+                        .padding(.horizontal, 5)
+                        .frame(height: 16)
+                        .background(viewModel.stateColor)
+                    Text(viewModel.metaText)
+                        .font(.sMono(11, .medium))
+                        .foregroundStyle(Color.sText3)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                if !viewModel.detailText.isEmpty {
+                    Text(viewModel.detailText)
+                        .font(.sInter(12))
+                        .foregroundStyle(Color.sText2)
+                        .lineLimit(2)
+                }
+                SegmentedBar(values: viewModel.isFile ? viewModel.connections : [viewModel.progress],
+                             complete: viewModel.progress >= 1)
+                    .frame(height: 4)
+                    .padding(.top, 2)
             }
         }
+        .padding(.vertical, 6)
         .swipeActions {
             Button(role: .destructive) {
                 viewModel.removeTorrent()

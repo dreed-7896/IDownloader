@@ -1,5 +1,12 @@
 import Foundation
 
+/// One shared link. `page` is the web page it came from, kept so an expired link can be fetched again.
+struct SharedLink: Codable, Hashable {
+    var url: URL
+    var page: URL?
+    var title: String?
+}
+
 enum SharedDownloadInbox {
     static let group = "group.com.dreed7896.IDownloader.live-activity"
     static let notification = "com.dreed7896.IDownloader.sharedURL"
@@ -41,17 +48,25 @@ enum SharedDownloadInbox {
         return url
     }
 
-    static func handoffURL(for urls: [URL] = []) -> URL {
+    static func handoffURL(for links: [SharedLink] = []) -> URL {
         var components = URLComponents()
-        components.scheme = "Pulled"
+        components.scheme = "stash"
         components.host = "shared"
-        if !urls.isEmpty { components.queryItems = urls.map { URLQueryItem(name: "url", value: $0.absoluteString) } }
-        return components.url!
+        var items = links.map { URLQueryItem(name: "url", value: $0.url.absoluteString) }
+        if let page = links.lazy.compactMap(\.page).first { items.append(URLQueryItem(name: "page", value: page.absoluteString)) }
+        if !items.isEmpty { components.queryItems = items }
+        return components.url ?? URL(string: "stash://shared")!
     }
 
     static func links(from handoff: URL) -> [URL] {
         (URLComponents(url: handoff, resolvingAgainstBaseURL: false)?.queryItems ?? [])
             .filter { $0.name == "url" }.compactMap { $0.value.flatMap { link(in: $0) } }
+    }
+
+    /// The page a handoff's links came from, when the share carried one.
+    static func page(from handoff: URL) -> URL? {
+        (URLComponents(url: handoff, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+            .first { $0.name == "page" }?.value.flatMap { URL(string: $0) }.flatMap { supported($0) ? $0 : nil }
     }
 
     static func urls(in text: String) -> [URL] {
@@ -71,24 +86,33 @@ enum SharedDownloadInbox {
         url.scheme?.lowercased() == "magnet" || (["http", "https"].contains(url.scheme?.lowercased()) && url.host != nil)
     }
 
-    static func enqueue(_ urls: [URL]) throws {
+    static func enqueue(_ links: [SharedLink]) throws {
         guard let directory else { throw CocoaError(.fileWriteNoPermission) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         // One atomic file per share avoids a read/modify/write race between processes.
         let file = directory.appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
-        try JSONEncoder().encode(urls.map(\.absoluteString)).write(to: file, options: .atomic)
+        try JSONEncoder().encode(links).write(to: file, options: .atomic)
         CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
             CFNotificationName(notification as CFString), nil, nil, true)
     }
 
-    static func consume(_ process: (URL) -> Void) {
-        guard let directory, let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return }
-        for file in files where file.pathExtension == "json" {
-            guard let data = try? Data(contentsOf: file), let values = try? JSONDecoder().decode([String].self, from: data) else { continue }
-            for value in values {
-                if let url = URL(string: value), supported(url) { process(url) }
-            }
+    static func consume(_ process: (SharedLink) -> Void) {
+        guard let directory, let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey]) else { return }
+        let sorted = files.filter { $0.pathExtension == "json" }.sorted {
+            let a = (try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            let b = (try? $1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            return a < b
+        }
+        for file in sorted {
+            // Remove first: a crash while processing must not replay the share forever.
+            guard let data = try? Data(contentsOf: file) else { continue }
             try? FileManager.default.removeItem(at: file)
+            if let links = try? JSONDecoder().decode([SharedLink].self, from: data) {
+                links.filter { supported($0.url) }.forEach(process)
+            } else if let values = try? JSONDecoder().decode([String].self, from: data) {
+                // Shares queued by older versions.
+                values.compactMap { URL(string: $0) }.filter(supported).forEach { process(SharedLink(url: $0)) }
+            }
         }
     }
 }

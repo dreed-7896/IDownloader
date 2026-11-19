@@ -22,7 +22,7 @@ enum SColor {
     }
 
     private static func dynamic(dark: UInt32, light: UInt32, alpha: CGFloat = 1) -> UIColor {
-        UIColor { $0.userInterfaceStyle == .dark ? rgb(dark, alpha) : rgb(light, alpha) }
+        UIColor { $0.userInterfaceStyle == .dark ? SColor.rgb(dark, alpha) : SColor.rgb(light, alpha) }
     }
 
     static let bg = dynamic(dark: 0x09090B, light: 0xFAFAF7)
@@ -239,7 +239,7 @@ enum StashTheme {
         if let method = class_getClassMethod(cls, sizeWeightSelector) {
             let original = unsafeBitCast(method_getImplementation(method), to: SizeWeight.self)
             let block: @convention(block) (AnyClass, CGFloat, CGFloat) -> UIFont = { c, size, weight in
-                guarded({ SFont.ui(size, UIFont.Weight(rawValue: weight)) }) {
+                StashTheme.guarded({ SFont.ui(size, UIFont.Weight(rawValue: weight)) }) {
                     original(c, sizeWeightSelector, size, weight)
                 }
             }
@@ -252,7 +252,7 @@ enum StashTheme {
             guard let method = class_getClassMethod(cls, selector) else { continue }
             let original = unsafeBitCast(method_getImplementation(method), to: Size.self)
             let block: @convention(block) (AnyClass, CGFloat) -> UIFont = { c, size in
-                guarded({ SFont.ui(size, weight) }) { original(c, selector, size) }
+                StashTheme.guarded({ SFont.ui(size, weight) }) { original(c, selector, size) }
             }
             method_setImplementation(method, imp_implementationWithBlock(block))
         }
@@ -262,7 +262,7 @@ enum StashTheme {
         if let method = class_getClassMethod(cls, styleSelector) {
             let original = unsafeBitCast(method_getImplementation(method), to: Style.self)
             let block: @convention(block) (AnyClass, NSString) -> UIFont = { c, style in
-                guarded({ SFont.preferred(UIFont.TextStyle(rawValue: style as String)) }) {
+                StashTheme.guarded({ SFont.preferred(UIFont.TextStyle(rawValue: style as String)) }) {
                     original(c, styleSelector, style)
                 }
             }
@@ -274,7 +274,7 @@ enum StashTheme {
         if let method = class_getClassMethod(cls, styleTraitsSelector) {
             let original = unsafeBitCast(method_getImplementation(method), to: StyleTraits.self)
             let block: @convention(block) (AnyClass, NSString, UITraitCollection?) -> UIFont = { c, style, traits in
-                guarded({ SFont.preferred(UIFont.TextStyle(rawValue: style as String), traits: traits) }) {
+                StashTheme.guarded({ SFont.preferred(UIFont.TextStyle(rawValue: style as String), traits: traits) }) {
                     original(c, styleTraitsSelector, style, traits)
                 }
             }

@@ -80,7 +80,7 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
             .map { "" }.assign(to: &viewModel.$searchQuery)
 
         addButton.primaryAction = UIAction(title: %"common.add", image: .init(systemName: "plus")) { [unowned self] _ in
-            present(makeUrlAlert(), animated: true)
+            presentAddDownloadSheet()
         }
 
         filesButton.primaryAction = UIAction(title: "Files", image: .init(systemName: "folder")) { [weak self] _ in
@@ -297,9 +297,11 @@ private extension TorrentListViewController {
                     switch emptyType {
                     case .noData:
                         var config = UIContentUnavailableConfiguration.empty()
-                        config.image = .init(systemName: "fireworks")
-                        config.text = "No downloads"
-                        config.secondaryText = "Add a file URL, magnet link, or torrent to get started."
+                        config.image = .init(systemName: "square.stack.3d.down.forward")
+                        config.imageProperties.tintColor = SColor.mint
+                        config.text = "Your stash is empty"
+                        config.textProperties.font = SFont.display(24, .heavy) ?? .systemFont(ofSize: 24, weight: .heavy)
+                        config.secondaryText = "Share a page or link to Stash from any app, or tap + to paste one."
                         contentUnavailableConfiguration = config
                     case .badSearch:
                         contentUnavailableConfiguration = UIContentUnavailableConfiguration.search()

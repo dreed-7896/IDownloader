@@ -25,6 +25,14 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
     private var locationNames: [URL: String] = [:]
     private var sort: Sort = .name
     private var previewURL: URL?
+    /// Torrent files under storage, read once per reload. Reading `handle.snapshot` for every row
+    /// raced the engine updating snapshots in the background and crashed the Files screen.
+    private struct IndexedTorrentFile {
+        let handle: TorrentHandle
+        let index: Int
+        let incomplete: Bool
+    }
+    private var torrentFiles: [String: IndexedTorrentFile] = [:]
     private var subscriptions = Set<AnyCancellable>()
     private var accessingScope = false
     private let sortButton = UIBarButtonItem(title: "Sort", image: UIImage(systemName: "arrow.up.arrow.down"))
@@ -33,7 +41,7 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
     init(rootDirectory: URL = TorrentService.downloadPath, directory: URL? = nil, title: String? = nil) {
         self.rootDirectory = rootDirectory
         self.directory = directory ?? rootDirectory
-        super.init(style: .insetGrouped)
+        super.init(style: .plain)
         self.title = title ?? (directory == nil ? "Files" : self.directory.lastPathComponent)
     }
 
@@ -48,6 +56,12 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
         super.viewDidLoad()
         accessingScope = rootDirectory.startAccessingSecurityScopedResource()
         navigationItem.largeTitleDisplayMode = .always
+        tableView.backgroundColor = SColor.bg
+        tableView.separatorColor = SColor.line
+        tableView.separatorInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 0)
+        tableView.register(FileRowCell.self, forCellReuseIdentifier: FileRowCell.reuseIdentifier)
+        tableView.register(StashSectionHeader.self, forHeaderFooterViewReuseIdentifier: StashSectionHeader.reuseIdentifier)
+        tableView.sectionHeaderTopPadding = 0
         search.searchResultsUpdater = self
         search.obscuresBackgroundDuringPresentation = false
         search.searchBar.placeholder = "Search files"
@@ -101,7 +115,21 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
         }
     }
 
+    private func indexTorrentFiles() {
+        var index: [String: IndexedTorrentFile] = [:]
+        for handle in Array(TorrentService.shared.torrents.values) {
+            let snapshot = handle.snapshot
+            guard let path = snapshot.downloadPath else { continue }
+            for file in snapshot.files {
+                let url = path.appendingPathComponent(file.path).standardizedFileURL
+                index[url.path] = IndexedTorrentFile(handle: handle, index: Int(file.index), incomplete: file.downloaded < file.size)
+            }
+        }
+        torrentFiles = index
+    }
+
     private func reloadFiles() {
+        indexTorrentFiles()
         do {
             var files = try readEntries(at: directory)
             if directory.standardizedFileURL == TorrentService.downloadPath.standardizedFileURL {
@@ -137,13 +165,9 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
             }
             tableView.reloadData()
             if entries.isEmpty && locations.isEmpty {
-                let label = UILabel()
-                label.text = query.isEmpty ? "No files yet\nCompleted downloads appear here. You can also import files." : "No matching files"
-                label.numberOfLines = 0
-                label.textAlignment = .center
-                label.textColor = .secondaryLabel
-                label.font = .preferredFont(forTextStyle: .body)
-                tableView.backgroundView = label
+                tableView.backgroundView = query.isEmpty
+                    ? StashEmptyView(kicker: "Files", title: "Nothing here yet", message: "Finished downloads land here. You can also import files.")
+                    : StashEmptyView(kicker: "Search", title: "No matches", message: "No files match “\(query)”.")
             } else {
                 tableView.backgroundView = nil
             }
@@ -169,31 +193,36 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         section == 0 ? entries.count : locations.count
     }
-    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        section == 1 ? "Other locations" : nil
+    override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+        guard let header = tableView.dequeueReusableHeaderFooterView(withIdentifier: StashSectionHeader.reuseIdentifier) as? StashSectionHeader else { return nil }
+        let files = entries.filter { !$0.isDirectory }.count
+        let folders = entries.count - files
+        header.label.text = section == 1 ? "OTHER LOCATIONS" : "\(folders) FOLDERS · \(files) FILES"
+        return header
+    }
+
+    override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+        section == 0 && entries.isEmpty ? 0 : UITableView.automaticDimension
     }
     private func entry(at indexPath: IndexPath) -> Entry {
         indexPath.section == 0 ? entries[indexPath.row] : locations[indexPath.row]
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "file") ?? UITableViewCell(style: .subtitle, reuseIdentifier: "file")
+        let cell = tableView.dequeueReusableCell(withIdentifier: FileRowCell.reuseIdentifier, for: indexPath) as! FileRowCell
         let entry = entry(at: indexPath)
-        var content = cell.defaultContentConfiguration()
-        content.text = locationNames[entry.url] ?? entry.name
-        content.textProperties.numberOfLines = 2
-        content.image = UIImage(systemName: entry.isDirectory ? "folder" : icon(for: entry.url))
-        content.imageProperties.tintColor = view.tintColor
-        content.imageProperties.maximumSize = CGSize(width: 28, height: 28)
+        let detail: String
         if indexPath.section == 1 {
-            content.secondaryText = "Storage location"
+            detail = "Storage location"
         } else if entry.isDirectory {
-            content.secondaryText = "Folder"
+            detail = "Folder"
         } else {
             let size = ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file)
-            content.secondaryText = isIncomplete(entry.url) ? "\(size) · Downloading" : "\(size) · \(DateFormatter.localizedString(from: entry.date, dateStyle: .short, timeStyle: .none))"
+            detail = isIncomplete(entry.url) ? "\(size) · Downloading" : "\(size) · \(DateFormatter.localizedString(from: entry.date, dateStyle: .medium, timeStyle: .none))"
         }
-        cell.contentConfiguration = content
+        cell.configure(url: entry.url, title: locationNames[entry.url] ?? entry.name, detail: detail,
+                       symbolName: entry.isDirectory ? "folder.fill" : icon(for: entry.url),
+                       isDirectory: entry.isDirectory, loadsThumbnail: !isIncomplete(entry.url))
         cell.accessoryType = entry.isDirectory ? .disclosureIndicator : .none
         return cell
     }
@@ -348,12 +377,11 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
     }
 
     private func canModify(_ url: URL) -> Bool {
-        for handle in TorrentService.shared.torrents.values {
-            guard let path = handle.snapshot.downloadPath else { continue }
-            if handle.snapshot.files.contains(where: { contains(url, path.appendingPathComponent($0.path)) }) {
-                showMessage("File belongs to a torrent", "Remove the torrent from Downloads and choose Keep files before renaming or deleting these files.")
-                return false
-            }
+        indexTorrentFiles()
+        let parent = url.standardizedFileURL.path
+        if torrentFiles.keys.contains(where: { $0 == parent || $0.hasPrefix(parent + "/") }) {
+            showMessage("File belongs to a torrent", "Remove the torrent from Downloads and choose Keep files before renaming or deleting these files.")
+            return false
         }
         if managedDownloads(under: url).contains(where: { $0.state != .completed }) {
             showMessage("Download in progress", "Finish or remove the download before changing its files.")
@@ -363,20 +391,11 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
     }
 
     private func torrentPair(for url: URL) -> (handle: TorrentHandle, fileIndex: Int)? {
-        for handle in TorrentService.shared.torrents.values {
-            guard let path = handle.snapshot.downloadPath else { continue }
-            if let file = handle.snapshot.files.first(where: { path.appendingPathComponent($0.path).standardizedFileURL == url.standardizedFileURL }) {
-                return (handle: handle, fileIndex: Int(file.index))
-            }
-        }
-        return nil
+        torrentFiles[url.standardizedFileURL.path].map { (handle: $0.handle, fileIndex: $0.index) }
     }
 
     private func isIncomplete(_ url: URL) -> Bool {
-        if let pair = torrentPair(for: url) {
-            let file = pair.handle.snapshot.files[pair.fileIndex]
-            return file.downloaded < file.size
-        }
+        if let file = torrentFiles[url.standardizedFileURL.path] { return file.incomplete }
         return managedDownloads(under: url).contains { $0.state != .completed }
     }
 
@@ -422,7 +441,9 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
     }
 
     func numberOfPreviewItems(in controller: QLPreviewController) -> Int { previewURL == nil ? 0 : 1 }
-    func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { previewURL! as NSURL }
+    func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+        (previewURL ?? directory) as NSURL
+    }
     private func showError(_ error: Error) { showMessage("Unable to access file", error.localizedDescription) }
     private func showMessage(_ title: String, _ message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)

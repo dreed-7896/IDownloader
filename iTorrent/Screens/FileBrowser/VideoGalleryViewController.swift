@@ -35,8 +35,8 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
         let layout = UICollectionViewCompositionalLayout { _, environment in
             let count = environment.container.effectiveContentSize.width > 600 ? 3 : 2
             let item = NSCollectionLayoutItem(layoutSize: .init(widthDimension: .fractionalWidth(1 / CGFloat(count)), heightDimension: .fractionalHeight(1)))
-            item.contentInsets = .init(top: 6, leading: 6, bottom: 6, trailing: 6)
-            let group = NSCollectionLayoutGroup.horizontal(layoutSize: .init(widthDimension: .fractionalWidth(1), heightDimension: .absolute(environment.container.effectiveContentSize.width / CGFloat(count) * 0.56 + 76)), subitem: item, count: count)
+            item.contentInsets = .init(top: 5, leading: 5, bottom: 5, trailing: 5)
+            let group = NSCollectionLayoutGroup.horizontal(layoutSize: .init(widthDimension: .fractionalWidth(1), heightDimension: .absolute(environment.container.effectiveContentSize.width / CGFloat(count) * 0.5625 + 64)), subitem: item, count: count)
             let section = NSCollectionLayoutSection(group: group)
             section.contentInsets = .init(top: 8, leading: 10, bottom: 16, trailing: 10)
             return section
@@ -52,7 +52,7 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        collectionView.backgroundColor = .systemBackground
+        collectionView.backgroundColor = SColor.bg
         collectionView.register(VideoGalleryCell.self, forCellWithReuseIdentifier: "video")
         search.searchResultsUpdater = self
         search.obscuresBackgroundDuringPresentation = false
@@ -103,9 +103,10 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
             roots.append(scope.url)
         }
         var incomplete = Set<String>()
-        for handle in TorrentService.shared.torrents.values {
-            guard let root = handle.snapshot.downloadPath else { continue }
-            for file in handle.snapshot.files where file.downloaded < file.size {
+        for handle in Array(TorrentService.shared.torrents.values) {
+            let snapshot = handle.snapshot
+            guard let root = snapshot.downloadPath else { continue }
+            for file in snapshot.files where file.downloaded < file.size {
                 incomplete.insert(root.appendingPathComponent(file.path).standardizedFileURL.path)
             }
         }
@@ -164,12 +165,9 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
         updateActions()
         collectionView.reloadData()
         if filtered.isEmpty {
-            let label = UILabel()
-            label.text = query.isEmpty ? "No videos yet\nCompleted videos from all download folders appear here." : "No matching videos"
-            label.numberOfLines = 0
-            label.textAlignment = .center
-            label.textColor = .secondaryLabel
-            collectionView.backgroundView = label
+            collectionView.backgroundView = query.isEmpty
+                ? StashEmptyView(kicker: "Videos", title: "No videos yet", message: "Finished videos from every download folder show up here.")
+                : StashEmptyView(kicker: "Search", title: "No matches", message: "No videos match “\(query)”.")
         } else { collectionView.backgroundView = nil }
     }
 
@@ -245,9 +243,10 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
     private func confirmDelete(_ targets: [GalleryVideo], all: Bool) {
         guard !targets.isEmpty else { return }
         let paths = Set(targets.map { $0.url.standardizedFileURL })
-        let hasTorrents = TorrentService.shared.torrents.values.contains { handle in
-            guard let root = handle.snapshot.downloadPath else { return false }
-            return handle.snapshot.files.contains { paths.contains(root.appendingPathComponent($0.path).standardizedFileURL) }
+        let hasTorrents = Array(TorrentService.shared.torrents.values).contains { handle in
+            let snapshot = handle.snapshot
+            guard let root = snapshot.downloadPath else { return false }
+            return snapshot.files.contains { paths.contains(root.appendingPathComponent($0.path).standardizedFileURL) }
         }
         var message = all
             ? "Permanently delete all \(targets.count) videos in the gallery, including videos outside the current search?"
@@ -267,10 +266,11 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
         let paths = Set(targets.map { $0.url.standardizedFileURL })
         // Detach owning torrents before deleting individual files. Keeping their
         // other files avoids deleting an entire series for one selected episode.
-        let hashes = TorrentService.shared.torrents.values.compactMap { handle in
-            guard let root = handle.snapshot.downloadPath,
-                  handle.snapshot.files.contains(where: { paths.contains(root.appendingPathComponent($0.path).standardizedFileURL) }) else { return nil as TorrentHashes? }
-            return handle.snapshot.infoHashes
+        let hashes = Array(TorrentService.shared.torrents.values).compactMap { handle in
+            let snapshot = handle.snapshot
+            guard let root = snapshot.downloadPath,
+                  snapshot.files.contains(where: { paths.contains(root.appendingPathComponent($0.path).standardizedFileURL) }) else { return nil as TorrentHashes? }
+            return snapshot.infoHashes
         }
         for hash in hashes { TorrentService.shared.removeTorrent(by: hash, deleteFiles: false) }
         var failures: [String] = []
@@ -315,38 +315,46 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
 
 private final class VideoGalleryCell: UICollectionViewCell {
     private let thumbnail = UIImageView()
+    private let placeholder = UIImageView(image: UIImage(systemName: "play.rectangle"))
+    private let duration = UILabel()
     private let name = UILabel()
     private let detail = UILabel()
     private let selectionBadge = UIImageView()
-    private var generator: AVAssetImageGenerator?
     private var representedURL: URL?
-    private static let images: NSCache<NSURL, UIImage> = {
-        let cache = NSCache<NSURL, UIImage>()
-        cache.countLimit = 150
-        return cache
-    }()
+    private var loadTask: Task<Void, Never>?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        thumbnail.backgroundColor = .secondarySystemBackground
+        thumbnail.backgroundColor = SColor.s2
         thumbnail.contentMode = .scaleAspectFill
         thumbnail.clipsToBounds = true
-        thumbnail.layer.cornerRadius = 10
-        name.font = .preferredFont(forTextStyle: .subheadline)
+        thumbnail.layer.borderWidth = 1
+        thumbnail.layer.borderColor = SColor.line.cgColor
+        placeholder.tintColor = SColor.text3
+        placeholder.contentMode = .center
+        placeholder.preferredSymbolConfiguration = .init(pointSize: 22, weight: .regular)
+        placeholder.translatesAutoresizingMaskIntoConstraints = false
+        thumbnail.addSubview(placeholder)
+        duration.font = SFont.mono(10, .bold) ?? .monospacedSystemFont(ofSize: 10, weight: .bold)
+        duration.textColor = .white
+        duration.backgroundColor = UIColor.black.withAlphaComponent(0.7)
+        duration.textAlignment = .center
+        duration.isHidden = true
+        duration.translatesAutoresizingMaskIntoConstraints = false
+        thumbnail.addSubview(duration)
+        name.font = SFont.ui(14, .semibold) ?? .systemFont(ofSize: 14, weight: .semibold)
+        name.textColor = SColor.text
         name.numberOfLines = 2
-        detail.font = .preferredFont(forTextStyle: .caption1)
-        detail.textColor = .secondaryLabel
+        detail.font = SFont.mono(10, .medium) ?? .monospacedSystemFont(ofSize: 10, weight: .medium)
+        detail.textColor = SColor.text3
         let stack = UIStackView(arrangedSubviews: [thumbnail, name, detail])
         stack.axis = .vertical
-        stack.spacing = 4
+        stack.spacing = 6
+        stack.setCustomSpacing(8, after: thumbnail)
         stack.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(stack)
         selectionBadge.translatesAutoresizingMaskIntoConstraints = false
-        selectionBadge.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 24, weight: .semibold)
-        selectionBadge.layer.shadowColor = UIColor.black.cgColor
-        selectionBadge.layer.shadowOpacity = 0.5
-        selectionBadge.layer.shadowRadius = 3
-        selectionBadge.layer.shadowOffset = .zero
+        selectionBadge.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 20, weight: .bold)
         selectionBadge.isHidden = true
         contentView.addSubview(selectionBadge)
         NSLayoutConstraint.activate([
@@ -355,10 +363,16 @@ private final class VideoGalleryCell: UICollectionViewCell {
             stack.topAnchor.constraint(equalTo: contentView.topAnchor),
             stack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor),
             thumbnail.heightAnchor.constraint(equalTo: thumbnail.widthAnchor, multiplier: 9 / 16),
-            selectionBadge.topAnchor.constraint(equalTo: thumbnail.topAnchor, constant: 8),
-            selectionBadge.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: -8),
-            selectionBadge.widthAnchor.constraint(equalToConstant: 28),
-            selectionBadge.heightAnchor.constraint(equalToConstant: 28)
+            placeholder.centerXAnchor.constraint(equalTo: thumbnail.centerXAnchor),
+            placeholder.centerYAnchor.constraint(equalTo: thumbnail.centerYAnchor),
+            duration.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: -6),
+            duration.bottomAnchor.constraint(equalTo: thumbnail.bottomAnchor, constant: -6),
+            duration.heightAnchor.constraint(equalToConstant: 16),
+            duration.widthAnchor.constraint(greaterThanOrEqualToConstant: 36),
+            selectionBadge.topAnchor.constraint(equalTo: thumbnail.topAnchor, constant: 6),
+            selectionBadge.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: -6),
+            selectionBadge.widthAnchor.constraint(equalToConstant: 26),
+            selectionBadge.heightAnchor.constraint(equalToConstant: 26)
         ])
         thumbnail.setContentHuggingPriority(.defaultLow, for: .vertical)
         name.setContentCompressionResistancePriority(.required, for: .vertical)
@@ -369,42 +383,51 @@ private final class VideoGalleryCell: UICollectionViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
-        generator?.cancelAllCGImageGeneration()
-        generator = nil
+        loadTask?.cancel()
+        loadTask = nil
         representedURL = nil
         thumbnail.image = nil
+        placeholder.isHidden = false
+        duration.isHidden = true
         setSelectionMode(false, selected: false)
     }
 
     func setSelectionMode(_ enabled: Bool, selected: Bool) {
         selectionBadge.isHidden = !enabled
-        selectionBadge.image = UIImage(systemName: selected ? "checkmark.circle.fill" : "circle")
-        selectionBadge.tintColor = selected ? .systemBlue : .white
-        thumbnail.layer.borderWidth = selected ? 3 : 0
-        thumbnail.layer.borderColor = UIColor.systemBlue.cgColor
+        selectionBadge.image = UIImage(systemName: selected ? "checkmark.square.fill" : "square")
+        selectionBadge.tintColor = selected ? SColor.mint : .white
+        thumbnail.layer.borderWidth = selected ? 3 : 1
+        thumbnail.layer.borderColor = (selected ? SColor.mint : SColor.line).cgColor
         accessibilityTraits = selected ? [.button, .selected] : [.button]
         accessibilityHint = enabled ? "Double tap to \(selected ? "deselect" : "select") video" : "Double tap to play video"
     }
 
     func configure(url: URL, size: Int64) {
         representedURL = url
-        name.text = url.lastPathComponent
-        detail.text = ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+        name.text = url.deletingPathExtension().lastPathComponent
+        detail.text = "\(url.pathExtension.uppercased()) · \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))"
         accessibilityLabel = url.lastPathComponent
-        thumbnail.image = Self.images.object(forKey: url as NSURL) ?? UIImage(systemName: "play.rectangle.fill")
-        if Self.images.object(forKey: url as NSURL) != nil { return }
-        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 500, height: 300)
-        self.generator = generator
-        generator.generateCGImagesAsynchronously(forTimes: [NSValue(time: .zero)]) { [weak self] _, image, _, _, _ in
-            guard let image else { return }
-            let thumbnail = UIImage(cgImage: image)
-            DispatchQueue.main.async {
-                Self.images.setObject(thumbnail, forKey: url as NSURL)
-                guard self?.representedURL == url else { return }
-                self?.thumbnail.image = thumbnail
+        let side = CGSize(width: 320, height: 180)
+        if let cached = ThumbnailProvider.shared.cached(for: url, size: side) {
+            thumbnail.image = cached
+            placeholder.isHidden = true
+        } else {
+            let scale = traitCollection.displayScale
+            loadTask = Task { [weak self] in
+                let image = await ThumbnailProvider.shared.thumbnail(for: url, size: side, scale: scale)
+                guard !Task.isCancelled, let self, self.representedURL == url, let image else { return }
+                self.thumbnail.image = image
+                self.placeholder.isHidden = true
             }
+        }
+        Task { [weak self] in
+            guard let seconds = try? await AVURLAsset(url: url).load(.duration).seconds, seconds.isFinite, seconds > 0 else { return }
+            guard let self, self.representedURL == url else { return }
+            let total = Int(seconds.rounded())
+            self.duration.text = total >= 3600
+                ? String(format: " %d:%02d:%02d ", total / 3600, total / 60 % 60, total % 60)
+                : String(format: " %d:%02d ", total / 60, total % 60)
+            self.duration.isHidden = false
         }
     }
 }

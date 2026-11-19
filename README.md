@@ -1,45 +1,45 @@
-# Pulled
+# Stash
 
-An iOS download manager maintained by Raahat. Download files over HTTP/HTTPS and torrents, subscribe to RSS feeds, manage files, and play videos.
+An iOS downloader for videos, files and torrents, maintained by Raahat. It shares Midoku's boxy dark design.
 
-## Install and test
+## Install
 
-Add this source URL in **LiveContainer** or **SideStore**:
+Add the combined source in **SideStore**, **AltStore** or **LiveContainer**. It lists both Stash and Midoku:
+
+```
+https://github.com/dreed-7896/Midoku/releases/download/source/apps.json
+```
+
+The Stash-only source still works:
 
 ```
 https://github.com/dreed-7896/IDownloader/releases/download/nightly/source.json
 ```
 
-Refresh the source and install **Pulled**. After later changes, refresh it again and update the app. A successful build on `main` publishes a new IPA and refreshes the catalog automatically; a failed build keeps the previous working download available.
+Every successful build on `main` publishes a new IPA; the combined source picks it up within 30 minutes. iOS/iPadOS 16 or later is required.
 
-You can also download the IPA from [GitHub Releases](https://github.com/dreed-7896/IDownloader/releases). The IPA is ready for LiveContainer import or signing by SideStore/AltStore. Ad hoc signatures preserve the App Group permissions for the installer; they are not a device installation certificate. iOS/iPadOS 16 or later is required.
+## Sharing to Stash
+
+Share a web page, a file link or a magnet link from any app and choose **Stash**. Stash opens and starts the download without a confirmation sheet.
+
+- **Safari pages:** the share runs a small script on the page that finds the video playing on it. Stash downloads that video and saves the page as the download's **Website**.
+- **Links from other apps:** if the link is a web page, Stash loads it and looks for its video (Open Graph video tags, `<video>`/`<source>` tags, embedded video links). Direct file links download as they are.
+- **Expired links:** open the download and tap **Fetch again from website**. Stash finds the video on the saved page again and restarts the download from the fresh link. **Open website** opens the page in your browser.
+
+Streaming-only videos (HLS/DASH or browser `blob:` players) have no single file to save. Stash lists the page as failed and keeps its website so you can open it.
+
+iOS lets a share extension open its app only through a workaround. If iOS refuses, the share card shows **Open Stash** and the link stays queued. A LiveContainer guest cannot register its own share extension; install Stash through SideStore/AltStore for its own share-sheet entry.
 
 ## Features
 
-- Torrent and magnet link downloads
-- Direct HTTP/HTTPS file downloads with up to 16 parallel parts (4 by default)
-- Automatic single-connection fallback when a server does not support byte ranges
-- Share HTTP/HTTPS or magnet links to Pulled from other apps
-- File download history, pause/resume, retry, preview, and deletion
-- Pause, resume, download priorities, and speed limits
-- RSS feed subscriptions
-- Files app integration and WebDAV sharing
-- Built-in VLC playback with AirPlay and Picture in Picture
-- Background download modes
+- Web page video detection, with the source website saved for every download
+- Direct HTTP/HTTPS downloads with up to 16 parallel connections (4 by default) and automatic single-connection fallback
+- Torrents and magnet links
+- Files browser with thumbnails, and a video gallery with duration badges
+- Built-in VLC player with AirPlay and Picture in Picture
 - Live Activities and Dynamic Island progress
-- iPhone and iPad layouts, themes, and alternate icons
-
-## Downloads and sharing
-
-Files and torrents appear together on the main download list, with an icon identifying each type. Tap **+** to open the link input directly. A valid HTTP/HTTPS or magnet link in the clipboard is filled in automatically; confirm with **Start download**. Tap any download for its details, including state, speed, time remaining, size, progress, source, and save location. File downloads show one progress segment per connection and individual connection byte counts. Magnet links start torrents; HTTP/HTTPS links download files. Tap a local `.torrent` file in Files or another app to open the torrent import screen. Use a direct file link: sharing a webpage downloads that page, rather than extracting its videos or attachments.
-
-Set **Settings → Download queue → Download parts** to a number from 1 to 16. The downloader probes actual byte-range support, validates each part, and uses one connection if the server ignores ranges. The setting applies to new downloads. Files are saved in **On My iPhone → Pulled → Downloads**, in separate folders to prevent name collisions. Download progress uses the existing Live Activity/Dynamic Island layout, including speed, percentage, and time remaining.
-
-The share extension resolves the App Groups in the installed signing profile, queues links in a shared container, and attempts to open Pulled. If iOS declines the handoff, open Pulled to start the queued downloads; the extension shows this instruction. If no shared container is available, the handoff carries the URLs directly. If iOS also declines that handoff, the link is copied: open Pulled and tap **+** to confirm the download. Share extensions must be included when signing/installing the app. A LiveContainer guest cannot register its own share extension with iOS, so install Pulled directly through SideStore/AltStore to use its own entry in the system share sheet. With recent LiveContainer versions, you can instead select **LiveContainer → Pulled** from the share sheet to forward a URL to the guest app; see [LiveContainer's sharing guide](https://github.com/LiveContainer/LiveContainer#open-in-app-support).
-
-**Settings → Download queue** controls active transfers and concurrent downloads across both torrents and file downloads. Each multipart file uses one queue slot, regardless of its connection count. Downloads are processed oldest first; waiting items show **Queued**, and pausing an item takes it out of the queue. Seeding has its own torrent-only limit and uses remaining active slots. Zero means unlimited.
-
-File transfers use background URLSession tasks and do not activate the torrent audio background helper. The torrent audio mode renews background execution with a zero-sample, muted audio buffer, so it emits no periodic sound. Pausing suspends active connections; retrying a failed transfer restarts it. iOS controls scheduling while the app is suspended, and user force-quit stops background work until the app is reopened.
+- RSS feeds, WebDAV sharing and Files app integration
+- Background downloads, app lock, iPhone and iPad layouts
 
 ## Development
 
@@ -53,12 +53,12 @@ brew install boost
 open iTorrent.xcworkspace
 ```
 
-Use Xcode 26.6 and the `iTorrent` scheme. The inherited workspace and target names are retained as internal build identifiers. The installed app is named `Pulled`. Its existing bundle identity (`com.dreed7896.IDownloader`), App Group, and background session identifiers are retained so updates preserve downloads, settings, sharing, and Live Activities. The repository and source URL stay stable.
+Use Xcode 26.6 and the `iTorrent` scheme. The inherited workspace and target names are retained as internal build identifiers. The installed app is named `Stash` (the built product is still `Pulled.app`). Its existing bundle identity (`com.dreed7896.IDownloader`), App Group, and background session identifiers are retained so updates preserve downloads, settings, sharing, and Live Activities. The repository and source URL stay stable.
 
-The **Build and publish Pulled** workflow builds each push to `main`. Each build gets its own version (`1.0.<run number>`) and permanent release download URL. The source metadata reads the version, bundle identifier, minimum iOS version, and size from the actual packaged IPA.
+The **Build and publish Stash** workflow builds each push to `main` and `claude/**` branches; only `main` publishes. Each build gets its own version (`1.0.<run number>`) and permanent release download URL. The source metadata reads the version, bundle identifier, minimum iOS version, and size from the actual packaged IPA.
 
 ## Credits and license
 
-Pulled is based on [iTorrent by XITRIX (Daniil Vinogradov)](https://github.com/XITRIX/iTorrent), distributed under the [MIT license](LICENSE.txt). The original copyright notice is preserved. This is an independently maintained project and does not automatically synchronize with upstream.
+Stash is based on [iTorrent by XITRIX (Daniil Vinogradov)](https://github.com/XITRIX/iTorrent), distributed under the [MIT license](LICENSE.txt). The original copyright notice is preserved. This is an independently maintained project and does not automatically synchronize with upstream.
 
 Includes LibTorrent, LibTorrent-Swift, MVVMFoundation, GCDWebServer, SwiftVLC, and other dependencies under their respective licenses.
