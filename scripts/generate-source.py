@@ -15,7 +15,7 @@ with zipfile.ZipFile(ipa) as archive:
     info = plistlib.loads(archive.read(paths[0]))
 assert info['CFBundleIdentifier'] == 'com.dreed7896.IDownloader'
 assert info['CFBundleDisplayName'] == 'Stash'
-assert info['CFBundleName'] == 'Stash'
+assert info['CFBundleName'] in ('Stash', 'Pulled')  # product name stays Pulled for update continuity
 version = {
     'version': info['CFBundleShortVersionString'],
     'buildVersion': info['CFBundleVersion'],
