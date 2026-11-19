@@ -26,7 +26,7 @@ struct TorrentDetailProgressCellView: MvvmSwiftUICellProtocol {
                 } else {
                     SegmentedProgressView(progress: $viewModel.segmentedProgress)
                         .frame(height: 4)
-                        .clipShape(Capsule())
+                        .clipShape(Rectangle())
                 }
             }
         }

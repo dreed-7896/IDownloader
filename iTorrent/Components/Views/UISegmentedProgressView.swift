@@ -79,7 +79,7 @@ public class UISegmentedProgressView: UIView {
 
     private func setup() {
         clipsToBounds = true
-        layer.cornerRadius = defaultHeight / 2
+        layer.cornerRadius = 0
         setContentHuggingPriority(.required, for: .vertical)
         setContentCompressionResistancePriority(.required, for: .vertical)
     }

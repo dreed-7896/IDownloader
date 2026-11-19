@@ -96,8 +96,8 @@ struct ConnectionProgressStrip: View {
             ForEach(Array(progress.enumerated()), id: \.offset) { index, value in
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color(uiColor: .systemFill))
-                        Capsule().fill(.tint)
+                        Rectangle().fill(Color.sS3)
+                        Rectangle().fill(Color.sMint)
                             .frame(width: geometry.size.width * min(1, max(0, value)))
                     }
                 }

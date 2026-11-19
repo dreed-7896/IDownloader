@@ -87,28 +87,10 @@ class TagsView: UIScrollView {
     }
 
     private func setupBackgroundView() {
-#if os(iOS)
-        if #available(iOS 26, *) {
-            let effect = UIGlassEffect()
-//            effect.isInteractive = true
-            effect.tintColor = .tintColor
-
-            backgroundView = UIVisualEffectView(effect: effect)
-            backgroundView.clipsToBounds = true
-            backgroundView.layer.cornerCurve = .continuous
-        } else {
-            backgroundView = UIView()
-            backgroundView.clipsToBounds = true
-            backgroundView.backgroundColor = .tintColor
-            backgroundView.layer.cornerCurve = .continuous
-        }
-#else
+        // Stash: the selected chip is a flat filled square (Midoku `.chip` style).
         backgroundView = UIView()
         backgroundView.clipsToBounds = true
-        backgroundView.backgroundColor = PreferencesStorage.shared.tintColor
-        backgroundView.layer.cornerCurve = .continuous
-#endif
-
+        backgroundView.backgroundColor = SColor.text
         insertSubview(backgroundView, aboveSubview: bottomStackView)
     }
 
@@ -131,10 +113,12 @@ class TagsView: UIScrollView {
         }
 
         for title in titles {
-            let bottomButton = button(with: title, foregroundColor: .label)
+            let bottomButton = button(with: title, foregroundColor: SColor.text2)
+            bottomButton.layer.borderWidth = 1
+            bottomButton.layer.borderColor = SColor.line2.cgColor
             bottomStackView.addArrangedSubview(bottomButton)
 
-            let topButton = button(with: title, foregroundColor: .white)
+            let topButton = button(with: title, foregroundColor: SColor.bg)
             topStackView.addArrangedSubview(topButton)
         }
 
@@ -147,7 +131,7 @@ class TagsView: UIScrollView {
     private func button(with title: String, foregroundColor: UIColor) -> UIButton {
         let titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { container in
             var container = container
-            container.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
+            container.font = SFont.ui(13, .semibold) ?? UIFont.systemFont(ofSize: 13, weight: .semibold)
 
             return container
         }
@@ -155,7 +139,8 @@ class TagsView: UIScrollView {
         let button = UIButton(type: .system)
         button.configuration = .plain()
         button.configuration?.title = title
-        button.configuration?.cornerStyle = .capsule
+        button.configuration?.cornerStyle = .fixed
+        button.configuration?.background.cornerRadius = 0
         button.configuration?.baseForegroundColor = foregroundColor
         button.configuration?.titleTextAttributesTransformer = titleTextAttributesTransformer
         button.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 8.33, leading: 12, bottom: 8, trailing: 12.66)
@@ -173,10 +158,10 @@ class TagsView: UIScrollView {
             if bottomStackView.arrangedSubviews.indices.contains(selectedTagIndex) {
                 let button = bottomStackView.arrangedSubviews[selectedTagIndex]
 
-                tagMaskView.layer.cornerRadius = button.frame.height / 2
+                tagMaskView.layer.cornerRadius = 0
                 tagMaskView.frame = button.frame
 
-                backgroundView.layer.cornerRadius = button.frame.height / 2
+                backgroundView.layer.cornerRadius = 0
                 backgroundView.frame = button.frame
 
                 scrollRectToVisible(button.frame, animated: true)

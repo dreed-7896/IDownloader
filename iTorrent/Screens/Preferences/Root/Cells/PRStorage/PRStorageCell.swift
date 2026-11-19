@@ -14,7 +14,7 @@ class PRStorageCell<VM: PRStorageViewModel>: MvvmCollectionViewListCell<VM> {
     @IBOutlet private var labels: PortionBarLabels!
 
     override func setup(with viewModel: VM) {
-        progressBarView.layer.cornerRadius = 6
+        progressBarView.layer.cornerRadius = 0
         progressBarView.layer.cornerCurve = .continuous
 
         Task { await MemorySpaceManager.shared.update() }
