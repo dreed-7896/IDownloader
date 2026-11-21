@@ -39,7 +39,7 @@ final class FileRowCell: UITableViewCell {
         symbol.tintColor = SColor.text3
         symbol.preferredSymbolConfiguration = .init(pointSize: 18, weight: .medium)
         symbol.translatesAutoresizingMaskIntoConstraints = false
-        badge.font = SFont.mono(9, .bold) ?? .monospacedSystemFont(ofSize: 9, weight: .bold)
+        badge.font = SFont.mono(10, .bold) ?? .monospacedSystemFont(ofSize: 10, weight: .bold)
         badge.textColor = SColor.onAccent
         badge.backgroundColor = SColor.mint
         badge.textAlignment = .center
@@ -48,10 +48,10 @@ final class FileRowCell: UITableViewCell {
         tile.addSubview(thumb)
         tile.addSubview(badge)
 
-        name.font = SFont.ui(15, .semibold) ?? .systemFont(ofSize: 15, weight: .semibold)
+        name.font = SFont.ui(16, .semibold) ?? .systemFont(ofSize: 16, weight: .semibold)
         name.textColor = SColor.text
         name.numberOfLines = 2
-        meta.font = SFont.mono(11, .medium) ?? .monospacedSystemFont(ofSize: 11, weight: .medium)
+        meta.font = SFont.mono(13, .medium) ?? .monospacedSystemFont(ofSize: 13, weight: .medium)
         meta.textColor = SColor.text3
         let text = UIStackView(arrangedSubviews: [name, meta])
         text.axis = .vertical
@@ -74,7 +74,7 @@ final class FileRowCell: UITableViewCell {
             symbol.centerYAnchor.constraint(equalTo: tile.centerYAnchor),
             badge.leadingAnchor.constraint(equalTo: tile.leadingAnchor),
             badge.bottomAnchor.constraint(equalTo: tile.bottomAnchor),
-            badge.heightAnchor.constraint(equalToConstant: 14),
+            badge.heightAnchor.constraint(equalToConstant: 16),
             badge.widthAnchor.constraint(greaterThanOrEqualToConstant: 24),
             text.leadingAnchor.constraint(equalTo: tile.trailingAnchor, constant: 14),
             text.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
@@ -109,6 +109,8 @@ final class FileRowCell: UITableViewCell {
         let ext = url.pathExtension.uppercased()
         badge.text = isDirectory || ext.isEmpty ? nil : " \(ext.prefix(4)) "
         badge.isHidden = badge.text == nil
+        badge.backgroundColor = SColor.mint
+        badge.textColor = SColor.onAccent
         thumb.image = nil
         guard loadsThumbnail, !isDirectory else { return }
         let size = Self.tileSize
@@ -135,7 +137,7 @@ final class StashSectionHeader: UITableViewHeaderFooterView {
         var background = UIBackgroundConfiguration.clear()
         background.backgroundColor = SColor.bg
         backgroundConfiguration = background
-        label.font = SFont.mono(11, .semibold) ?? .monospacedSystemFont(ofSize: 11, weight: .semibold)
+        label.font = SFont.mono(12, .semibold) ?? .monospacedSystemFont(ofSize: 12, weight: .semibold)
         label.textColor = SColor.text3
         label.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(label)
@@ -157,7 +159,7 @@ final class StashEmptyView: UIView {
         super.init(frame: .zero)
         let k = UILabel()
         k.text = kicker.uppercased()
-        k.font = SFont.mono(11, .semibold) ?? .monospacedSystemFont(ofSize: 11, weight: .semibold)
+        k.font = SFont.mono(12, .semibold) ?? .monospacedSystemFont(ofSize: 12, weight: .semibold)
         k.textColor = SColor.mint
         let t = UILabel()
         t.text = title
@@ -167,7 +169,7 @@ final class StashEmptyView: UIView {
         t.textAlignment = .center
         let m = UILabel()
         m.text = message
-        m.font = SFont.ui(15) ?? .systemFont(ofSize: 15)
+        m.font = SFont.ui(16) ?? .systemFont(ofSize: 16)
         m.textColor = SColor.text2
         m.numberOfLines = 0
         m.textAlignment = .center

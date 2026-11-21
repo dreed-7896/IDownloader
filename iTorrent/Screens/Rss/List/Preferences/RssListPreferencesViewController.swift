@@ -16,7 +16,7 @@ class RssListPreferencesViewController<VM: RssListPreferencesViewModel>: BaseCol
         title = %"preferences"
 
         // FIXME: Dirty hack for better looking top appearance, should be fixed!!!
-        navigationItem.largeTitleDisplayMode = .always
+        navigationItem.largeTitleDisplayMode = .never
         collectionView.alwaysBounceVertical = false
         collectionView.dragInteractionEnabled = false
 

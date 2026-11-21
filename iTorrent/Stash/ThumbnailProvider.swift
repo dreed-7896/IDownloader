@@ -9,6 +9,7 @@
 
 import AVFoundation
 import QuickLookThumbnailing
+import SwiftVLC
 import UIKit
 import UniformTypeIdentifiers
 
@@ -58,6 +59,8 @@ final class ThumbnailProvider: @unchecked Sendable {
                 image = quickLook
             }
             if image == nil { image = await bestFrame(url, pixels: pixels) }
+            // MKV, AVI, WebM and other formats AVFoundation cannot open: decode with VLC.
+            if image == nil { image = await vlcFrame(url, pixels: pixels) }
             if image == nil { image = await quickLook(url, size: size, scale: scale) }
         } else {
             image = await quickLook(url, size: size, scale: scale)
@@ -117,6 +120,48 @@ final class ThumbnailProvider: @unchecked Sendable {
         if let fallback { return UIImage(cgImage: fallback.0) }
         // Some files report no seekable frames inside; the first frame is better than nothing.
         return (try? await generator.image(at: .zero).image).map { UIImage(cgImage: $0) }
+    }
+
+    /// Same frame selection as `bestFrame`, using libVLC's thumbnailer.
+    private func vlcFrame(_ url: URL, pixels: CGSize) async -> UIImage? {
+        guard let media = try? Media(url: url) else { return nil }
+        _ = try? await media.parse(timeout: .seconds(8))
+        let seconds = media.duration.map(Self.seconds) ?? 0
+        let width = Int(max(320, pixels.width))
+        let fractions: [Double] = seconds <= 0 ? [0] : seconds < 8 ? [0.5, 0.3] : [0.12, 0.25, 0.4, 0.55]
+        var fallback: (UIImage, Double)?
+        for fraction in fractions {
+            if Task.isCancelled { return nil }
+            let offset = Duration.milliseconds(Int64(max(0, seconds * fraction) * 1000))
+            guard let data = try? await media.thumbnail(at: offset, width: width, height: 0, seekMode: .fast, timeout: .seconds(8)),
+                  let image = UIImage(data: data), let cgImage = image.cgImage else { continue }
+            let stats = Self.luminance(cgImage)
+            if stats.mean > 0.12, stats.deviation > 0.06 { return image }
+            let score = stats.mean + stats.deviation
+            if fallback == nil || score > fallback!.1 { fallback = (image, score) }
+        }
+        return fallback?.0
+    }
+
+    private static func seconds(_ duration: Duration) -> Double {
+        Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
+    }
+
+    private let durations = NSCache<NSString, NSNumber>()
+
+    /// Video length in seconds, from AVFoundation or, for other containers, libVLC.
+    func duration(of url: URL) async -> Double? {
+        let key = url.standardizedFileURL.path as NSString
+        if let cached = durations.object(forKey: key) { return cached.doubleValue }
+        var value: Double?
+        if let time = try? await AVURLAsset(url: url).load(.duration), time.isNumeric, time.seconds > 0 {
+            value = time.seconds
+        } else if let media = try? Media(url: url) {
+            _ = try? await media.parse(timeout: .seconds(8))
+            value = media.duration.map(Self.seconds).flatMap { $0 > 0 ? $0 : nil }
+        }
+        if let value { durations.setObject(NSNumber(value: value), forKey: key) }
+        return value
     }
 
     // MARK: - Image analysis

@@ -175,9 +175,9 @@ struct FileDownloadDetailsView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text(item.stateTitle)
-                    .font(.sMono(11, .bold)).textCase(.uppercase).tracking(1)
+                    .font(.sMono(12, .bold)).textCase(.uppercase).tracking(1)
                     .foregroundStyle(Color.sOnAccent)
-                    .padding(.horizontal, 6).frame(height: 20)
+                    .padding(.horizontal, 6).frame(height: 22)
                     .background(stateColor(item))
                 Text(item.page?.host ?? item.url.host ?? "")
                     .sLabel()
@@ -259,7 +259,7 @@ struct FileDownloadDetailsView: View {
                                 Text(item.title ?? website.host ?? website.absoluteString)
                                     .font(.sInter(15, .semibold)).foregroundStyle(Color.sText).lineLimit(2)
                                     .multilineTextAlignment(.leading)
-                                Text(website.absoluteString).font(.sMono(11, .medium)).foregroundStyle(Color.sText3).lineLimit(1)
+                                Text(website.absoluteString).font(.sMono(12, .medium)).foregroundStyle(Color.sText3).lineLimit(1)
                             }
                             Spacer(minLength: 0)
                             Image(systemName: "arrow.up.right").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.sText3)
@@ -435,15 +435,15 @@ struct InfoGrid: View {
                 Group {
                     if long {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(row.0).sLabel(10)
-                            Text(row.1).font(.sMono(12, .medium)).foregroundStyle(Color.sText2).lineLimit(4)
+                            Text(row.0).sLabel(11)
+                            Text(row.1).font(.sMono(13, .medium)).foregroundStyle(Color.sText2).lineLimit(4)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
                         HStack {
-                            Text(row.0).font(.sInter(14)).foregroundStyle(Color.sText2)
+                            Text(row.0).font(.sInter(15)).foregroundStyle(Color.sText2)
                             Spacer()
-                            Text(row.1).font(.sMono(13, .semibold)).foregroundStyle(Color.sText)
+                            Text(row.1).font(.sMono(14, .semibold)).foregroundStyle(Color.sText)
                         }
                     }
                 }

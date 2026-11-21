@@ -55,7 +55,7 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
     override func viewDidLoad() {
         super.viewDidLoad()
         accessingScope = rootDirectory.startAccessingSecurityScopedResource()
-        navigationItem.largeTitleDisplayMode = .always
+        navigationItem.largeTitleDisplayMode = .never
         tableView.backgroundColor = SColor.bg
         tableView.separatorColor = SColor.line
         tableView.separatorInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 0)
@@ -74,11 +74,12 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
         navigationItem.rightBarButtonItems = [sortButton, videos]
         configureSortMenu()
 
-        let newFolder = UIBarButtonItem(title: "New folder", image: UIImage(systemName: "folder.badge.plus"),
-                                       primaryAction: UIAction { [weak self] _ in self?.createFolder() })
-        let importFiles = UIBarButtonItem(title: "Import files", image: UIImage(systemName: "square.and.arrow.down"),
-                                         primaryAction: UIAction { [weak self] _ in self?.importFiles() })
-        toolbarItems = [newFolder, .flexibleSpace(), importFiles]
+        toolbarItems = [
+            StashBarItem.make(title: "New folder", systemImage: "folder.badge.plus") { [weak self] in self?.createFolder() },
+            StashBarItem.gap(),
+            StashBarItem.make(title: "Import", systemImage: "square.and.arrow.down") { [weak self] in self?.importFiles() },
+            .flexibleSpace()
+        ]
         refreshControl = UIRefreshControl()
         refreshControl?.addTarget(self, action: #selector(refreshFiles), for: .valueChanged)
 

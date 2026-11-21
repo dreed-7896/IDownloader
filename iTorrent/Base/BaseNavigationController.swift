@@ -26,6 +26,6 @@ class BaseNavigationController: SANavigationController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationBar.prefersLargeTitles = true
+        navigationBar.prefersLargeTitles = false
     }
 }

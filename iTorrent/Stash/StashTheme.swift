@@ -34,11 +34,16 @@ enum SColor {
     static let text = dynamic(dark: 0xF4F4F6, light: 0x14181A)
     static let text2 = dynamic(dark: 0xB4B4BE, light: 0x4A5350)
     static let text3 = dynamic(dark: 0x8E8E9A, light: 0x6E7773)
-    /// Stash mint; Midoku's sibling accent.
-    static let mint = rgb(0x3DD6A3)
+    /// The accent: the user's tint color (Stash mint by default).
+    static var mint: UIColor { PreferencesStorage.shared.tintColor }
     static let amber = rgb(0xFFB547)
     static let coral = rgb(0xFF6B5E)
-    static let onAccent = rgb(0x0B0B0F)
+    /// Text on the accent: dark on light accents, white on dark ones.
+    static var onAccent: UIColor {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        mint.resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark)).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.55 ? rgb(0x0B0B0F) : .white
+    }
 }
 
 extension Color {
@@ -51,10 +56,10 @@ extension Color {
     static let sText = Color(uiColor: SColor.text)
     static let sText2 = Color(uiColor: SColor.text2)
     static let sText3 = Color(uiColor: SColor.text3)
-    static let sMint = Color(uiColor: SColor.mint)
+    static var sMint: Color { Color(uiColor: SColor.mint) }
     static let sAmber = Color(uiColor: SColor.amber)
     static let sCoral = Color(uiColor: SColor.coral)
-    static let sOnAccent = Color(uiColor: SColor.onAccent)
+    static var sOnAccent: Color { Color(uiColor: SColor.onAccent) }
 }
 
 // MARK: - Fonts
@@ -123,9 +128,9 @@ enum SFont {
         case .headline: return (16, .bold, false)
         case .subheadline: return (14, .regular, false)
         case .callout: return (15, .regular, false)
-        case .footnote: return (13, .regular, false)
-        case .caption1: return (12, .regular, false)
-        case .caption2: return (11, .regular, false)
+        case .footnote: return (14, .regular, false)
+        case .caption1: return (13, .regular, false)
+        case .caption2: return (12, .regular, false)
         default: return (15, .regular, false)
         }
     }
@@ -149,7 +154,7 @@ extension Font {
     }
 
     /// Mono uppercase labels (Midoku `.kicker` / `.label`).
-    static func sMono(_ size: CGFloat = 11, _ weight: Font.Weight = .semibold) -> Font {
+    static func sMono(_ size: CGFloat = 12, _ weight: Font.Weight = .semibold) -> Font {
         guard SFont.available else { return .system(size: size, weight: weight, design: .monospaced) }
         return .custom(SFont.monoName(weight.sRaw), size: size, relativeTo: .caption)
     }
@@ -174,7 +179,7 @@ extension Font.Weight {
 
 extension View {
     /// Mono, uppercase, letter-spaced, muted section label.
-    func sLabel(_ size: CGFloat = 11) -> some View {
+    func sLabel(_ size: CGFloat = 12) -> some View {
         font(.sMono(size)).textCase(.uppercase).tracking(1).foregroundStyle(Color.sText3)
     }
 }
@@ -334,6 +339,12 @@ enum StashTheme {
         return image.withRenderingMode(.alwaysOriginal)
     }
 
+    /// Re-applies accent-colored appearance after the user changes the tint.
+    static func applyAccent(_ color: UIColor) {
+        UISwitch.appearance().onTintColor = color
+        UIProgressView.appearance().progressTintColor = color
+    }
+
     private static func applyAppearance() {
         let titleFont = SFont.display(17, .bold) ?? .systemFont(ofSize: 17, weight: .semibold)
         let largeFont = SFont.display(34, .heavy) ?? .systemFont(ofSize: 34, weight: .bold)
@@ -373,7 +384,7 @@ enum StashTheme {
         UIToolbar.appearance().scrollEdgeAppearance = toolbar
         UIToolbar.appearance().compactAppearance = toolbar
 
-        UISwitch.appearance().onTintColor = SColor.mint
+        applyAccent(SColor.mint)
         UIRefreshControl.appearance().tintColor = SColor.text3
         UITableView.appearance().separatorColor = SColor.line
 

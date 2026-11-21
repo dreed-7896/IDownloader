@@ -25,26 +25,26 @@ struct TorrentListItemView: MvvmSwiftUICellProtocol {
                 .accessibilityLabel(viewModel.isFile ? "File download" : "Torrent")
             VStack(alignment: .leading, spacing: 6) {
                 Text(viewModel.title)
-                    .font(.sInter(15, .semibold))
+                    .font(.sInter(16, .semibold))
                     .foregroundStyle(Color.sText)
                     .lineLimit(2)
                 HStack(spacing: 6) {
                     Text(viewModel.stateLabel)
-                        .font(.sMono(10, .bold))
+                        .font(.sMono(11, .bold))
                         .textCase(.uppercase)
                         .foregroundStyle(Color.sOnAccent)
                         .padding(.horizontal, 5)
-                        .frame(height: 16)
+                        .frame(height: 18)
                         .background(viewModel.stateColor)
                     Text(viewModel.metaText)
-                        .font(.sMono(11, .medium))
+                        .font(.sMono(13, .medium))
                         .foregroundStyle(Color.sText3)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
                 if !viewModel.detailText.isEmpty {
                     Text(viewModel.detailText)
-                        .font(.sInter(12))
+                        .font(.sInter(14))
                         .foregroundStyle(Color.sText2)
                         .lineLimit(2)
                 }

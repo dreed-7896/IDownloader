@@ -36,7 +36,7 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
             let count = environment.container.effectiveContentSize.width > 600 ? 3 : 2
             let item = NSCollectionLayoutItem(layoutSize: .init(widthDimension: .fractionalWidth(1 / CGFloat(count)), heightDimension: .fractionalHeight(1)))
             item.contentInsets = .init(top: 5, leading: 5, bottom: 5, trailing: 5)
-            let group = NSCollectionLayoutGroup.horizontal(layoutSize: .init(widthDimension: .fractionalWidth(1), heightDimension: .absolute(environment.container.effectiveContentSize.width / CGFloat(count) * 0.5625 + 64)), subitem: item, count: count)
+            let group = NSCollectionLayoutGroup.horizontal(layoutSize: .init(widthDimension: .fractionalWidth(1), heightDimension: .absolute(environment.container.effectiveContentSize.width / CGFloat(count) * 0.5625 + 72)), subitem: item, count: count)
             let section = NSCollectionLayoutSection(group: group)
             section.contentInsets = .init(top: 8, leading: 10, bottom: 16, trailing: 10)
             return section
@@ -59,7 +59,7 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
         search.searchBar.placeholder = "Search all videos"
         navigationItem.searchController = search
         definesPresentationContext = true
-        navigationItem.largeTitleDisplayMode = .always
+        navigationItem.largeTitleDisplayMode = .never
         selectButton.primaryAction = UIAction(title: "Select") { [weak self] _ in self?.toggleSelection() }
         deleteAllButton.tintColor = .systemRed
         deleteAllButton.accessibilityLabel = "Delete all videos"
@@ -335,17 +335,17 @@ private final class VideoGalleryCell: UICollectionViewCell {
         placeholder.preferredSymbolConfiguration = .init(pointSize: 22, weight: .regular)
         placeholder.translatesAutoresizingMaskIntoConstraints = false
         thumbnail.addSubview(placeholder)
-        duration.font = SFont.mono(10, .bold) ?? .monospacedSystemFont(ofSize: 10, weight: .bold)
+        duration.font = SFont.mono(11, .bold) ?? .monospacedSystemFont(ofSize: 11, weight: .bold)
         duration.textColor = .white
         duration.backgroundColor = UIColor.black.withAlphaComponent(0.7)
         duration.textAlignment = .center
         duration.isHidden = true
         duration.translatesAutoresizingMaskIntoConstraints = false
         thumbnail.addSubview(duration)
-        name.font = SFont.ui(14, .semibold) ?? .systemFont(ofSize: 14, weight: .semibold)
+        name.font = SFont.ui(15, .semibold) ?? .systemFont(ofSize: 15, weight: .semibold)
         name.textColor = SColor.text
         name.numberOfLines = 2
-        detail.font = SFont.mono(10, .medium) ?? .monospacedSystemFont(ofSize: 10, weight: .medium)
+        detail.font = SFont.mono(12, .medium) ?? .monospacedSystemFont(ofSize: 12, weight: .medium)
         detail.textColor = SColor.text3
         let stack = UIStackView(arrangedSubviews: [thumbnail, name, detail])
         stack.axis = .vertical
@@ -367,7 +367,7 @@ private final class VideoGalleryCell: UICollectionViewCell {
             placeholder.centerYAnchor.constraint(equalTo: thumbnail.centerYAnchor),
             duration.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: -6),
             duration.bottomAnchor.constraint(equalTo: thumbnail.bottomAnchor, constant: -6),
-            duration.heightAnchor.constraint(equalToConstant: 16),
+            duration.heightAnchor.constraint(equalToConstant: 18),
             duration.widthAnchor.constraint(greaterThanOrEqualToConstant: 36),
             selectionBadge.topAnchor.constraint(equalTo: thumbnail.topAnchor, constant: 6),
             selectionBadge.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: -6),
@@ -421,7 +421,7 @@ private final class VideoGalleryCell: UICollectionViewCell {
             }
         }
         Task { [weak self] in
-            guard let seconds = try? await AVURLAsset(url: url).load(.duration).seconds, seconds.isFinite, seconds > 0 else { return }
+            guard let seconds = await ThumbnailProvider.shared.duration(of: url), seconds.isFinite, seconds > 0 else { return }
             guard let self, self.representedURL == url else { return }
             let total = Int(seconds.rounded())
             self.duration.text = total >= 3600

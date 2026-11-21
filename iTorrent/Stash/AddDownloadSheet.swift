@@ -100,8 +100,8 @@ struct AddDownloadSheet: View {
     private func hint(_ symbol: String, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.sText3).frame(width: 18)
-            Text(title).font(.sMono(11, .bold)).textCase(.uppercase).foregroundStyle(Color.sText2)
-            Text(detail).font(.sInter(13)).foregroundStyle(Color.sText3)
+            Text(title).font(.sMono(12, .bold)).textCase(.uppercase).foregroundStyle(Color.sText2)
+            Text(detail).font(.sInter(14)).foregroundStyle(Color.sText3)
         }
     }
 

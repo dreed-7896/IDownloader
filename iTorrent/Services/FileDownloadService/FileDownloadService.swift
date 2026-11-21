@@ -450,7 +450,8 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
         tasks[downloadTask.taskIdentifier] = nil
         bytes[downloadTask.taskIdentifier] = nil
         guard (200...299).contains(response.statusCode) else {
-            if response.statusCode == 416, tag.part != -2 { restart(tag.id, single: true) }
+            // 416: ranges unsupported. 429/503: the server rate-limits parallel connections.
+            if [416, 429, 503].contains(response.statusCode), tag.part != -2 { restart(tag.id, single: true) }
             else { fail(tag.id, "Server returned HTTP \(response.statusCode).") }
             return
         }

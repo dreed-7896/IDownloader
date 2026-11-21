@@ -55,6 +55,21 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
 
     private let tagsView = makeTagsView()
 
+    /// Files and Settings side by side; the accent New button on the right.
+    private lazy var mainToolbarItems: [UIBarButtonItem] = [
+        StashBarItem.make(title: nil, systemImage: "folder", accessibilityLabel: "Files") { [weak self] in
+            self?.navigationController?.pushViewController(FileBrowserViewController(), animated: true)
+        },
+        StashBarItem.gap(),
+        StashBarItem.make(title: nil, systemImage: "gearshape", accessibilityLabel: %"preferences") { [weak self] in
+            self?.viewModel.preferencesAction()
+        },
+        .flexibleSpace(),
+        StashBarItem.make(title: "New", systemImage: "plus", prominent: true, accessibilityLabel: "New download") { [weak self] in
+            self?.presentAddDownloadSheet()
+        }
+    ]
+
     private var getToolBarItems: [UIBarButtonItem] {
         collectionView.isEditing ?
             [
@@ -66,7 +81,7 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
                 .flexibleSpace(),
                 deleteButton
             ].compactMap { $0 } :
-            [addButton, .flexibleSpace(), filesButton, .flexibleSpace(), preferencesButton]
+            mainToolbarItems
     }
 
     override func viewDidLoad() {
@@ -195,7 +210,7 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
 private extension TorrentListViewController {
     func setup() {
         title = viewModel.title
-        navigationItem.largeTitleDisplayMode = .always
+        navigationItem.largeTitleDisplayMode = .never
         setupCollectionView()
         setupSearch()
     }

@@ -12,6 +12,7 @@ extension SceneDelegate {
     var tintColorBind: AnyCancellable {
         PreferencesStorage.shared.$tintColor.sink { [unowned self] color in
             window?.tintColor = color
+            StashTheme.applyAccent(color)
         }
     }
 
