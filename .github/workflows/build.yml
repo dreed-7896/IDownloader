@@ -68,6 +68,18 @@ jobs:
           fi
           gh release edit nightly --title 'Stash source'
           gh release upload nightly dist/source.json --clobber
+      - name: Refresh combined source in Midoku
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.MIDOKU_DISPATCH_TOKEN }}
+        run: |
+          # Needs a fine-grained token with Actions: read and write on dreed-7896/Midoku.
+          if [ -z "$GH_TOKEN" ]; then
+            echo "MIDOKU_DISPATCH_TOKEN not set; the combined source refreshes on its 30-minute schedule."
+            exit 0
+          fi
+          gh workflow run combined-source.yml --repo dreed-7896/Midoku --ref main \
+            || echo "::warning::Could not start the combined source refresh; it will refresh on its schedule."
       - uses: actions/upload-artifact@v4
         if: always()
         with:
