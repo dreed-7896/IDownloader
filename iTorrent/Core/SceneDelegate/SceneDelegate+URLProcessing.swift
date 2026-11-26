@@ -55,10 +55,7 @@ extension SceneDelegate {
 
     func showFileDownloads(selected: UUID? = nil) {
         (window?.rootViewController as? AppRootController)?.showDownloads()
-        guard let root = window?.rootViewController?.topPresented else { return }
-        let navigation = root as? UINavigationController ?? root.navigationController
-            ?? window?.downloadsSplitViewController?.viewControllers.first as? UINavigationController
-        guard let selected else { navigation?.popToRootViewController(animated: true); return }
+        guard let selected else { window?.downloadsNavigationController?.popToRootViewController(animated: true); return }
         let controller = FileDownloadDetailsViewModel.resolveVC(with: selected)
         window?.rootViewController?.navigate(to: controller, by: .detail(asRoot: true))
     }

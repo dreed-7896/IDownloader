@@ -130,7 +130,6 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
         binding()
 
         navigationItem.leadingItemGroups.append(.fixedGroup(items: [editButtonItem]))
-        navigationItem.trailingItemGroups.append(.fixedGroup(items: [rssButton, sortButton]))
         toolbarItems = getToolBarItems
 
         collectionView.contextMenuConfigurationForItemsAt = { [unowned self] indexPaths, _ in
@@ -223,8 +222,6 @@ private extension TorrentListViewController {
         searchVC.showsSearchResultsController = false
         searchVC.searchBar.placeholder = %"common.search"
 
-        searchVC.searchBar.scopeButtonTitles = ["Downloads", "RSS"]
-        searchVC.scopeBarActivation = .onSearchActivation
 
         navigationItem.searchController = searchVC
     }
@@ -271,9 +268,7 @@ private extension TorrentListViewController {
                 viewModel.filter = index <= 0 ? nil : TorrentHandle.State.filterArray[index - 1]
             }
 
-            viewModel.isGroupedByState.removeDuplicates().uiSink { [unowned self] value in
-                navigationItem.setBottomPalette(value ? nil : tagsView)
-            }
+            // The filter chips are not shown; the list always shows every download.
 
             viewModel.$hasRssNews.uiSink { [unowned self] rssHasNews in
                 let rssHasNewsImage: UIImage?
@@ -303,9 +298,6 @@ private extension TorrentListViewController {
                 updateSortingMenu(with: type, reverced: reverced, isGrouped: grouped)
             }
 
-            searchVC.searchBar.selectedScopeButtonIndexDidChangePublisher.uiSink { [unowned self] scopeIndex in
-                searchVC.showsSearchResultsController = scopeIndex == 1
-            }
 
             if #available(iOS 17.0, *) {
                 viewModel.emptyContentType.uiSink { [unowned self] emptyType in

@@ -27,7 +27,10 @@ class VLCPlayerViewModel: BaseViewModelWith<VLCPlayerViewModel.Config>, Observab
 
     @Published var showOverlay: Bool = true
     @Published var segmentedProgress: [Double]?
-    @Published var isLandscape = true
+    /// Portrait by default; the last choice is remembered for the next video and across next/previous.
+    @Published var isLandscape = UserDefaults.standard.bool(forKey: "player.isLandscape") {
+        didSet { UserDefaults.standard.set(isLandscape, forKey: "player.isLandscape") }
+    }
     @Published var playerSafeAreaInsets: UIEdgeInsets = .zero
     @Published private(set) var playlistIndex = 0
     private(set) var playlist: [URL] = []

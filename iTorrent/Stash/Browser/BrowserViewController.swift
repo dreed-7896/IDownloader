@@ -178,10 +178,10 @@ final class BrowserViewController: UIViewController {
         addressRow.directionalLayoutMargins = .init(top: 10, leading: 12, bottom: 6, trailing: 12)
 
         // Buttons: back, forward/home, menu, downloads, tabs
-        iconButton(backButton, "chevron.left", label: "Back")
-        iconButton(forwardButton, "chevron.right", label: "Forward")
+        iconButton(backButton, "chevron.backward", label: "Back")
+        iconButton(forwardButton, "chevron.forward", label: "Forward")
         iconButton(menuButton, "line.3.horizontal", label: "Menu", size: 20)
-        iconButton(downloadsButton, "arrow.down.to.line", label: "Downloads")
+        iconButton(downloadsButton, "arrow.down.circle", label: "Downloads", size: 20)
         backButton.addTarget(self, action: #selector(goBack), for: .touchUpInside)
         forwardButton.addTarget(self, action: #selector(goForwardOrHome), for: .touchUpInside)
         menuButton.addTarget(self, action: #selector(showMenu), for: .touchUpInside)
@@ -242,10 +242,10 @@ final class BrowserViewController: UIViewController {
             reloadButton.widthAnchor.constraint(equalToConstant: 36),
             reloadButton.heightAnchor.constraint(equalToConstant: 36),
 
-            downloadsBadge.centerXAnchor.constraint(equalTo: downloadsButton.centerXAnchor, constant: 13),
+            downloadsBadge.centerXAnchor.constraint(equalTo: downloadsButton.centerXAnchor, constant: 12),
             downloadsBadge.centerYAnchor.constraint(equalTo: downloadsButton.centerYAnchor, constant: -10),
-            downloadsBadge.heightAnchor.constraint(equalToConstant: 16),
-            downloadsBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 16)
+            downloadsBadge.heightAnchor.constraint(equalToConstant: 17),
+            downloadsBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 17)
         ])
         updateTabsButton(count: session.tabs.count)
     }
@@ -264,7 +264,7 @@ final class BrowserViewController: UIViewController {
 
     private func buildVideoButton() {
         var configuration = UIButton.Configuration.filled()
-        configuration.image = UIImage(systemName: "arrow.down.to.line", withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .bold))
+        configuration.image = UIImage(systemName: "arrow.down.to.line.compact", withConfiguration: UIImage.SymbolConfiguration(pointSize: 21, weight: .bold))
         configuration.cornerStyle = .fixed
         configuration.background.cornerRadius = 0
         videoButton.configuration = configuration
@@ -348,8 +348,11 @@ final class BrowserViewController: UIViewController {
     private func updateDownloadsBadge(_ count: Int) {
         downloadsBadge.isHidden = count == 0
         downloadsBadge.text = count > 9 ? " 9+ " : " \(count) "
-        downloadsBadge.backgroundColor = view.tintColor
+        // Fixed colors: the dock's tint isn't resolved before the view is on screen.
+        downloadsBadge.backgroundColor = SColor.mint
         downloadsBadge.textColor = SColor.onAccent
+        downloadsBadge.layer.borderColor = SColor.s1.cgColor
+        downloadsBadge.layer.borderWidth = 1.5
     }
 
     private func updateShield() {
@@ -373,7 +376,7 @@ final class BrowserViewController: UIViewController {
         let onPage = tab.isWebViewLoaded && !tab.isHome
         backButton.isEnabled = tab.isHome ? tab.isWebViewLoaded : tab.canGoBack
         let showsForward = onPage && tab.canGoForward
-        let symbol = showsForward || !onPage ? "chevron.right" : "house"
+        let symbol = showsForward || !onPage ? "chevron.forward" : "house"
         forwardButton.configuration?.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold))
         forwardButton.accessibilityLabel = symbol == "house" ? "Home" : "Forward"
         forwardButton.isEnabled = onPage || (tab.isHome && tab.canGoForward)
@@ -726,20 +729,22 @@ final class BrowserViewController: UIViewController {
         case .history:
             showLibrary(section: 1)
         case .files:
-            presentInNavigation(FileBrowserViewController())
+            openInDownloads(FileBrowserViewController())
         case .settings:
-            presentInNavigation(PreferencesViewModel().resolveVC())
+            openInDownloads(PreferencesViewModel().resolveVC())
         case .downloads:
             AppRootController.current?.showDownloads()
         case .toggleBookmark:
             if let page {
                 store.toggleBookmark(title: tab.title, url: page, iconURL: tab.iconURL)
+                if store.isBookmarked(page) { captureSnapshot(of: tab, for: page) }
                 toast(store.isBookmarked(page) ? "Bookmarked" : "Bookmark removed")
             }
         case .addToStartPage:
             if let page {
                 store.addFavorite(title: tab.title, url: page, iconURL: tab.iconURL)
                 if let icon = tab.iconURL { SiteIconCache.shared.store(iconURL: icon, for: page) }
+                captureSnapshot(of: tab, for: page)
                 toast("Added to start page")
             }
         case .copyLink:
@@ -752,15 +757,39 @@ final class BrowserViewController: UIViewController {
         }
     }
 
-    private func presentInNavigation(_ controller: UIViewController) {
-        let navigation = UINavigationController.resolve()
-        navigation.viewControllers = [controller]
-        let close = UIBarButtonItem(image: UIImage(systemName: "xmark"), primaryAction: UIAction { [weak navigation] _ in
-            navigation?.dismiss(animated: true)
-        })
-        close.accessibilityLabel = "Close"
-        controller.navigationItem.leadingItemGroups.insert(.fixedGroup(items: [close]), at: 0)
-        present(navigation, animated: true)
+    /// Saves what the page looks like now as the thumbnail of a bookmark or start-page site.
+    private func captureSnapshot(of tab: BrowserTab, for url: URL) {
+        guard tab.isWebViewLoaded, tab.webView.window != nil, tab.webView.bounds.width > 0 else { return }
+        let configuration = WKSnapshotConfiguration()
+        configuration.snapshotWidth = 420
+        tab.webView.takeSnapshot(with: configuration) { image, _ in
+            if let image { PageSnapshotStore.shared.save(image, for: url) }
+        }
+    }
+
+    /// Refreshes the thumbnail of a saved site when it's visited (missing or older than three days).
+    private func refreshSavedSnapshot(for tab: BrowserTab, url: URL) {
+        guard !tab.isPrivate else { return }
+        let snapshots = PageSnapshotStore.shared
+        let key = snapshots.key(url)
+        let store = BrowserStore.shared
+        guard let saved = (store.favorites + store.bookmarks).map(\.url).first(where: { snapshots.key($0) == key }),
+              (snapshots.age(for: saved) ?? .infinity) > 3 * 24 * 3600 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self, weak tab] in
+            guard let self, let tab, tab === self.session.selected, !tab.isHome, tab.url.map(snapshots.key) == key else { return }
+            self.captureSnapshot(of: tab, for: saved)
+        }
+    }
+
+    /// Opens a screen inside the Downloads sheet, so Back leads to the downloads list.
+    private func openInDownloads(_ controller: UIViewController) {
+        guard let root = AppRootController.current else { return }
+        root.showDownloads {
+            let navigation = root.downloads
+            if let first = navigation.viewControllers.first {
+                navigation.setViewControllers([first, controller], animated: navigation.viewControllers.count == 1)
+            }
+        }
     }
 
     private func shieldMenu() -> [UIMenuElement] {
@@ -1102,6 +1131,7 @@ extension BrowserViewController: WKNavigationDelegate, WKUIDelegate {
         guard let tab = session.tab(for: webView), let url = webView.url else { return }
         tab.captureIcon()
         if !tab.isPrivate { BrowserStore.shared.record(title: webView.title, url: url) }
+        if webView === shownWebView { refreshSavedSnapshot(for: tab, url: url) }
         session.save()
     }
 

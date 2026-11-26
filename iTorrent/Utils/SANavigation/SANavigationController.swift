@@ -11,10 +11,21 @@ import UIKit
 /// Swipe Anywhere - to close view controller
 public class SANavigationController: UINavigationController {
     var locker = true
-    private var isPerformingNavigationTransition = false
+    private var transitionStartedAt: Date?
+    private var isPerformingNavigationTransition: Bool {
+        get { transitionStartedAt.map { Date().timeIntervalSince($0) < 1 } ?? false }
+        set { transitionStartedAt = newValue ? Date() : nil }
+    }
 
+    /// A push is ignored only while a transition is really running. The flag expires on its own
+    /// because UIKit can skip `didShow` (for example when the stack changes off screen).
     var canPerformNavigationTransition: Bool {
         !isPerformingNavigationTransition && transitionCoordinator == nil
+    }
+
+    override public func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if transitionCoordinator == nil { transitionStartedAt = nil }
     }
 
     override public func viewDidLoad() {

@@ -41,8 +41,8 @@ extension AppDelegate {
         else { return }
 
         // If same screen already presented, do not show another one
-        if let svc = window.downloadsSplitViewController,
-           let mvvmVC = svc.detailNavigationController?.topViewController as? any MvvmViewControllerProtocol,
+        if let navigation = window.downloadsNavigationController,
+           let mvvmVC = navigation.topViewController as? any MvvmViewControllerProtocol,
            let viewModel = mvvmVC.viewModel as? TorrentDetailsViewModel,
            viewModel.infoHashes.best.hex == torrentHandle.snapshot.infoHashes.best.hex
         { return }

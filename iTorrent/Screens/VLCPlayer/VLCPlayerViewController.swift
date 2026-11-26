@@ -102,6 +102,8 @@ class VLCPlayerViewController: BaseHostingController<VLCPlayerViewController.Bod
                 self?.navigationController?.setNavigationBarHidden(true, animated: false)
             }
             viewModel.$url.sink { [weak self] url in self?.title = url?.lastPathComponent }
+            // Keep the chosen orientation when moving to the next or previous video.
+            viewModel.$url.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.rotatePlayer() }
             viewModel.$isLandscape.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.rotatePlayer() }
             viewModel.closeSignal.sink { [weak self] _ in self?.dismiss(animated: true) }
             viewModel.volumeSignal.sink { [weak self] volume in

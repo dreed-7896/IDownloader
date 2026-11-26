@@ -1,6 +1,6 @@
 # Drift
 
-A minimal iOS web browser that saves the videos you watch, maintained by Raahat. The browser fills the app; one bottom dock holds the address bar and Back, Forward/Home, Menu, Downloads and Tabs. Downloads (everything the app did before: files, videos, torrents) slides up from the dock. Formerly Stash.
+A minimal iOS web browser that saves the videos you watch, maintained by Raahat. The browser fills the app; one bottom dock holds the address bar and Back, Forward/Home, Menu, Downloads and Tabs. Downloads (everything the app did before: files, videos, torrents) opens as a sheet from the dock, and you can navigate inside it to details, files, the player and settings. Formerly Stash.
 
 ## Install
 
@@ -21,7 +21,7 @@ Every successful build on `main` publishes a new IPA; the combined source picks 
 ## Browser
 
 - One bottom dock: address bar with the ad-block shield, then Back, Forward/Home, Menu, Downloads (with a running-downloads badge) and Tabs. It tucks away while you scroll down and sits on the keyboard while you type
-- Start page with your favorite sites as icon tiles; bookmarks and history with site icons
+- Start page and bookmarks show page snapshots (taken when you save a page and refreshed when you visit it); history shows site icons
 - Menu sheet: ad blocker for this site, desktop site, dark pages, private tab, find on page, bookmarks, history, downloads, files, settings, search engine (Google, DuckDuckGo, Bing, Brave), clear browsing data
 - Tabs and private tabs (hold the tabs button for quick actions), long-press Back for history, pull to refresh
 - Long-press a link to open it in a new or private tab, download it or bookmark it

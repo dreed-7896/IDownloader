@@ -88,14 +88,7 @@ class SceneDelegate: MvvmSceneDelegate {
 
     override func resolveRootVC(with router: Router) -> UIViewController {
         let vc = router.resolve(TorrentListViewModel())
-
-        let nvc = UINavigationController.resolve()
-        nvc.viewControllers = [vc]
-
-        let svc = UISplitViewController.resolve()
-        svc.viewControllers = [nvc]
-
-        return AppRootController(downloads: svc)
+        return AppRootController(downloadsRoot: vc)
     }
 
     override func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {

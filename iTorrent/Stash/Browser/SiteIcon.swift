@@ -109,3 +109,84 @@ struct SiteIcon: View {
         return String(source.replacingOccurrences(of: "www.", with: "").prefix(1)).uppercased()
     }
 }
+
+// MARK: - Page snapshots
+
+/// Snapshots of bookmarked and start-page sites, taken when you bookmark a page and refreshed
+/// when you visit it again, so their tiles show the page itself.
+final class PageSnapshotStore {
+    static let shared = PageSnapshotStore()
+    static let updated = Notification.Name("DriftPageSnapshotUpdated")
+
+    private let memory = NSCache<NSString, UIImage>()
+    private let directory: URL = {
+        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Browser/Snapshots", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }()
+
+    /// Host and path without "www."/"m." or a trailing slash; the query is ignored.
+    func key(_ url: URL) -> String {
+        var host = url.host?.lowercased() ?? ""
+        for prefix in ["www.", "m.", "mobile."] where host.hasPrefix(prefix) { host.removeFirst(prefix.count) }
+        var path = url.path
+        while path.hasSuffix("/") { path.removeLast() }
+        var value: UInt64 = 14_695_981_039_346_656_037
+        for byte in (host + path).utf8 { value = (value ^ UInt64(byte)) &* 1_099_511_628_211 }
+        return String(value, radix: 36)
+    }
+
+    private func file(_ key: String) -> URL { directory.appendingPathComponent(key + ".jpg") }
+
+    func image(for url: URL) -> UIImage? {
+        let key = key(url)
+        if let image = memory.object(forKey: key as NSString) { return image }
+        guard let image = UIImage(contentsOfFile: file(key).path) else { return nil }
+        memory.setObject(image, forKey: key as NSString)
+        return image
+    }
+
+    func age(for url: URL) -> TimeInterval? {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: file(key(url)).path)
+        return (attributes?[.modificationDate] as? Date).map { Date().timeIntervalSince($0) }
+    }
+
+    func save(_ image: UIImage, for url: URL) {
+        let key = key(url)
+        memory.setObject(image, forKey: key as NSString)
+        if let data = image.jpegData(compressionQuality: 0.72) { try? data.write(to: file(key), options: .atomic) }
+        NotificationCenter.default.post(name: Self.updated, object: key)
+    }
+}
+
+/// A page preview card: the page's snapshot, or its icon until one is taken.
+struct PageThumbnail: View {
+    let title: String
+    let url: URL
+    var iconURL: URL?
+    var aspectRatio: CGFloat = 0.78
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Color.sS2
+            .aspectRatio(aspectRatio, contentMode: .fit)
+            .overlay(alignment: .top) {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    GeometryReader { proxy in
+                        SiteIcon(title: title, url: url, iconURL: iconURL, size: min(56, proxy.size.width * 0.42))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+            }
+            .clipped()
+            .overlay(Rectangle().strokeBorder(Color.sLine2, lineWidth: 1))
+            .onAppear { image = PageSnapshotStore.shared.image(for: url) }
+            .onReceive(NotificationCenter.default.publisher(for: PageSnapshotStore.updated)) { note in
+                if note.object as? String == PageSnapshotStore.shared.key(url) { image = PageSnapshotStore.shared.image(for: url) }
+            }
+    }
+}

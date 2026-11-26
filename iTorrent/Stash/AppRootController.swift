@@ -2,29 +2,57 @@
 //  AppRootController.swift
 //  Drift
 //
-//  The browser fills the app. Downloads (the downloads list, files, torrents, settings) slides up
-//  over it from the browser's Downloads button and closes back to the page.
+//  The browser fills the app. Downloads opens as a sheet over it (like Aloha): a navigation
+//  stack with the downloads list at its root, from which details, files, the player and
+//  settings push in. Swipe it down or tap ⌄ to get back to the page.
 //
 
 import Combine
 import LibTorrent
+import MvvmFoundation
 import UIKit
+
+/// The Downloads sheet. Screens that ask for a "detail" (built for the old split view) push here.
+final class DownloadsNavigationController: BaseNavigationController {
+    override func showDetailViewController(_ vc: UIViewController, sender: Any?) {
+        // A wrapped controller is a new detail "root": it replaces whatever detail is open.
+        if let navigation = vc as? UINavigationController, let top = navigation.topViewController {
+            navigation.setViewControllers([], animated: false)
+            if let root = viewControllers.first, viewControllers.count > 1 {
+                setViewControllers([root, top], animated: true)
+            } else {
+                pushViewController(top, animated: true)
+            }
+        } else {
+            pushViewController(vc, animated: true)
+        }
+    }
+}
 
 final class AppRootController: UIViewController {
     private(set) static weak var current: AppRootController?
 
     let browser = BrowserViewController()
-    let downloads: UISplitViewController
+    let downloads: DownloadsNavigationController
     /// Running downloads, shown as a badge on the browser's Downloads button.
     @Published private(set) var activeDownloads = 0
     private var subscriptions = Set<AnyCancellable>()
 
-    init(downloads: UISplitViewController) {
-        self.downloads = downloads
+    init(downloadsRoot: UIViewController) {
+        downloads = DownloadsNavigationController()
+        downloads.viewControllers = [downloadsRoot]
         super.init(nibName: nil, bundle: nil)
         Self.current = self
-        downloads.modalPresentationStyle = .fullScreen
-        addCloseButton()
+        downloads.modalPresentationStyle = .pageSheet
+        if let sheet = downloads.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
+        }
+        let close = UIBarButtonItem(image: UIImage(systemName: "chevron.down"), primaryAction: UIAction { [weak self] _ in
+            self?.hideDownloads()
+        })
+        close.accessibilityLabel = "Back to browser"
+        downloadsRoot.navigationItem.leadingItemGroups.insert(.fixedGroup(items: [close]), at: 0)
     }
 
     @available(*, unavailable)
@@ -53,17 +81,6 @@ final class AppRootController: UIViewController {
     }
 
     override var childForStatusBarStyle: UIViewController? { browser }
-    override var childForHomeIndicatorAutoHidden: UIViewController? { browser }
-
-    /// A "Browser" button on the downloads list closes Downloads.
-    private func addCloseButton() {
-        guard let list = (downloads.viewControllers.first as? UINavigationController)?.viewControllers.first else { return }
-        let close = UIBarButtonItem(image: UIImage(systemName: "chevron.down"), primaryAction: UIAction { [weak self] _ in
-            self?.hideDownloads()
-        })
-        close.accessibilityLabel = "Back to browser"
-        list.navigationItem.leadingItemGroups.insert(.fixedGroup(items: [close]), at: 0)
-    }
 
     var isShowingDownloads: Bool { downloads.presentingViewController != nil }
 
@@ -94,15 +111,15 @@ final class AppRootController: UIViewController {
         return true
     }
 
-    // Download screens open inside Downloads.
+    // Download screens open inside the Downloads sheet.
     override func showDetailViewController(_ vc: UIViewController, sender: Any?) {
         showDownloads { [weak self] in self?.downloads.showDetailViewController(vc, sender: sender) }
     }
 }
 
 extension UIWindow {
-    /// The Downloads split view, wherever it sits in the hierarchy.
-    var downloadsSplitViewController: UISplitViewController? {
-        (rootViewController as? AppRootController)?.downloads ?? rootViewController as? UISplitViewController
+    /// The Downloads navigation stack.
+    var downloadsNavigationController: UINavigationController? {
+        (rootViewController as? AppRootController)?.downloads
     }
 }
