@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>Stash</string>
+	<string>Drift</string>
 	<key>UIDesignRequiresCompatibility</key>
 	<true/>
 	<key>NSExtension</key>

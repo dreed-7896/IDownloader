@@ -46,7 +46,7 @@ class FileDownloadDetailsViewModel: BaseViewModelWith<UUID>, ObservableObject {
 
     func openWebsite() {
         guard let website else { return }
-        UIApplication.shared.open(website)
+        if !RootTabBarController.openInBrowser(website) { UIApplication.shared.open(website) }
     }
 
     func refetch() {

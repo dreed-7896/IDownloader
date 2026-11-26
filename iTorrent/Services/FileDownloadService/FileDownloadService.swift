@@ -24,6 +24,12 @@ struct FileDownload: Codable, Identifiable {
     var page: URL?
     /// The page title, when known.
     var title: String?
+    /// `.hls` downloads an HLS stream segment by segment; nil means a plain file.
+    var kind: Kind?
+    /// Extra request headers (Referer, User-Agent) captured from the browser.
+    var headers: [String: String]?
+    enum Kind: String, Codable { case file, hls }
+    var isHLS: Bool { kind == .hls }
     var progress: Double { totalBytes > 0 ? min(1, Double(receivedBytes) / Double(totalBytes)) : 0 }
     var isActive: Bool { [.preparing, .downloading, .assembling].contains(state) }
     var queueEligible: Bool { isActive || state == .queued }
@@ -65,6 +71,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
     var backgroundCompletion: (() -> Void)?
 
     private var tasks: [Int: URLSessionDownloadTask] = [:]
+    private var hlsTasks: [UUID: Task<Void, Never>] = [:]
     private var bytes: [Int: Int64] = [:]
     private var samples: [UUID: (Date, Int64)] = [:]
     private var restoring = true
@@ -110,7 +117,9 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
                 }
                 self.restoring = false
                 for item in self.downloads where item.queueEligible {
-                    if item.completedParts.count == item.parts, !item.completedParts.isEmpty {
+                    if item.isHLS {
+                        self.downloads[self.index(item.id)!].state = .queued
+                    } else if item.completedParts.count == item.parts, !item.completedParts.isEmpty {
                         self.assemble(item.id)
                     } else if !self.tasks.values.contains(where: { Tag($0)?.id == item.id }) {
                         self.downloads[self.index(item.id)!].state = .queued
@@ -122,8 +131,10 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
     }
 
     @discardableResult
-    func add(_ url: URL, page: URL? = nil, title: String? = nil) -> UUID? {
+    func add(_ url: URL, page: URL? = nil, title: String? = nil, kind: FileDownload.Kind? = nil,
+             headers: [String: String]? = nil, name: String? = nil) -> UUID? {
         guard ["http", "https"].contains(url.scheme?.lowercased()), url.host != nil else { return nil }
+        let kind = kind ?? (HLSDownloader.isPlaylist(url) ? .hls : nil)
         if let existing = downloads.first(where: { $0.url == url && $0.state != .completed }) {
             if let index = index(existing.id), downloads[index].page == nil, let page {
                 downloads[index].page = page
@@ -134,9 +145,12 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
             DownloadQueue.shared.startPendingDownloads()
             return existing.id
         }
-        let item = FileDownload(url: url, name: url.lastPathComponent.isEmpty ? "Download" : url.lastPathComponent,
+        var item = FileDownload(url: url, name: name ?? (url.lastPathComponent.isEmpty ? "Download" : url.lastPathComponent),
                                 state: .queued, requestedParts: min(16, max(1, PreferencesStorage.shared.fileDownloadParts)),
                                 page: page == url ? nil : page, title: title)
+        item.kind = kind
+        item.headers = headers
+        if kind == .hls { item.name = HLSDownloader.fileName(title: title, url: url, fragmented: false) }
         downloads.insert(item, at: 0)
         publish(item.id)
         DownloadQueue.shared.startPendingDownloads()
@@ -186,6 +200,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
         cancelTasks(id)
         try? FileManager.default.removeItem(at: directory(id))
         downloads[index].url = url
+        downloads[index].kind = HLSDownloader.isPlaylist(url) ? .hls : nil
         downloads[index].completedParts = []
         downloads[index].receivedBytes = 0
         downloads[index].totalBytes = 0
@@ -205,6 +220,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
         downloads[index].state = .paused
         downloads[index].speed = 0
         tasks.values.filter { Tag($0)?.id == id }.forEach { $0.suspend() }
+        hlsTasks.removeValue(forKey: id)?.cancel()
         publish(id)
     }
 
@@ -232,6 +248,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
             downloads[index].state = .queued
             downloads[index].speed = 0
             tasks.values.filter { Tag($0)?.id == id }.forEach { $0.suspend() }
+            hlsTasks.removeValue(forKey: id)?.cancel()
             samples[id] = nil
             publish(id)
         } else if allowed, downloads[index].state == .queued {
@@ -253,6 +270,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
 
     func connections(_ id: UUID) -> [Connection] {
         guard let item = downloads.first(where: { $0.id == id }) else { return [] }
+        if item.isHLS { return [Connection(number: 1, received: item.receivedBytes, total: max(item.totalBytes, item.receivedBytes))] }
         let chunk = item.totalBytes / Int64(max(1, item.parts))
         return (0..<item.parts).map { part in
             let length = part == item.parts - 1 ? item.totalBytes - Int64(part) * chunk : chunk
@@ -321,6 +339,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
 
     private func start(_ id: UUID) {
         guard let index = index(id) else { return }
+        if downloads[index].isHLS { startHLS(id); return }
         downloads[index].state = .preparing
         publish(id)
         createTask(downloads[index], part: downloads[index].requestedParts > 1 ? -1 : -2, start: 0, end: 0)
@@ -331,6 +350,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.allowsCellularAccess = PreferencesStorage.shared.isCellularEnabled
         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+        item.headers?.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         if part != -2 {
             request.setValue("bytes=\(start)-\(end)", forHTTPHeaderField: "Range")
             if part >= 0, let validator = item.validator { request.setValue(validator, forHTTPHeaderField: "If-Range") }
@@ -342,6 +362,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
     }
 
     private func cancelTasks(_ id: UUID) {
+        hlsTasks.removeValue(forKey: id)?.cancel()
         let obsolete = tasks.values.filter { Tag($0)?.id == id }
         for task in obsolete {
             tasks[task.taskIdentifier] = nil
@@ -352,6 +373,15 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
 
     private func restart(_ id: UUID, single: Bool = false) {
         guard let index = index(id) else { return }
+        if downloads[index].isHLS {
+            // Finished segments stay on disk, so a stream resumes where it stopped.
+            hlsTasks.removeValue(forKey: id)?.cancel()
+            downloads[index].generation = UUID()
+            downloads[index].error = nil
+            downloads[index].speed = 0
+            if restoring { publish(id) } else { startHLS(id) }
+            return
+        }
         let previousState = downloads[index].state
         // Invalidate callbacks from cancelled tasks before scheduling replacements.
         downloads[index].generation = UUID()
@@ -523,7 +553,7 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
         pendingAssemblies += 1
         ioQueue.async { [weak self] in
             let temporary = destination.deletingLastPathComponent().appendingPathComponent(".\(item.generation.uuidString).assembling")
-            let result: Result<Void, Error> = Result {
+            let result: Result<Int64, Error> = Result {
                 try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
                 FileManager.default.createFile(atPath: temporary.path, contents: nil)
                 let output = try FileHandle(forWritingTo: temporary)
@@ -535,7 +565,8 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
                 }
                 try output.synchronize()
                 let size = (try FileManager.default.attributesOfItem(atPath: temporary.path)[.size] as? NSNumber)?.int64Value
-                guard size == item.totalBytes else { throw URLError(.cannotDecodeContentData) }
+                guard item.isHLS || size == item.totalBytes else { throw URLError(.cannotDecodeContentData) }
+                return size ?? item.totalBytes
             }
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -545,11 +576,12 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
                     return
                 }
                 do {
-                    try result.get()
+                    let size = try result.get()
+                    self.downloads[index].totalBytes = size
                     if FileManager.default.fileExists(atPath: destination.path) { try FileManager.default.removeItem(at: destination) }
                     try FileManager.default.moveItem(at: temporary, to: destination)
                     self.downloads[index].state = .completed
-                    self.downloads[index].receivedBytes = item.totalBytes
+                    self.downloads[index].receivedBytes = size
                     try? FileManager.default.removeItem(at: self.directory(id))
                     self.publish(id)
                     if PreferencesStorage.shared.isDownloadNotificationsEnabled {
@@ -561,6 +593,84 @@ final class FileDownloadService: NSObject, ObservableObject, URLSessionDownloadD
                     }
                 } catch {
                     try? FileManager.default.removeItem(at: temporary)
+                    self.fail(id, error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    // MARK: - HLS
+
+    /// Downloads the stream's segments into numbered parts (skipping finished ones), then joins them.
+    private func startHLS(_ id: UUID) {
+        guard let index = index(id) else { return }
+        hlsTasks.removeValue(forKey: id)?.cancel()
+        downloads[index].state = .preparing
+        downloads[index].error = nil
+        publish(id)
+        let item = downloads[index]
+        let folder = directory(id)
+        hlsTasks[id] = Task { [weak self] in
+            do {
+                let plan = try await HLSDownloader.plan(for: item.url, headers: item.headers ?? [:])
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let count = plan.parts.count
+                await MainActor.run {
+                    guard let self, let index = self.index(id), self.downloads[index].generation == item.generation else { return }
+                    self.downloads[index].parts = count
+                    self.downloads[index].name = HLSDownloader.fileName(title: item.title, url: item.url, fragmented: plan.fragmented)
+                    if self.downloads[index].state == .preparing { self.downloads[index].state = .downloading }
+                    self.publish(id)
+                }
+                var done = Set(item.completedParts)
+                var received: Int64 = 0
+                for number in done {
+                    let size = (try? FileManager.default.attributesOfItem(atPath: folder.appendingPathComponent("\(number).part").path))?[.size]
+                    received += (size as? NSNumber)?.int64Value ?? 0
+                }
+                var window: (Date, Int64) = (Date(), received)
+                var keys: [URL: Data] = [:]
+                for (number, part) in plan.parts.enumerated() where !done.contains(number) {
+                    try Task.checkCancellation()
+                    var data = try await HLSDownloader.fetch(part.url, headers: item.headers ?? [:], range: part.range)
+                    if let key = part.key {
+                        if keys[key.url] == nil { keys[key.url] = try await HLSDownloader.fetch(key.url, headers: item.headers ?? [:]) }
+                        data = try HLSDownloader.decrypt(data, key: keys[key.url]!, iv: key.iv ?? HLSDownloader.iv(sequence: part.sequence))
+                    }
+                    try Task.checkCancellation()
+                    try data.write(to: folder.appendingPathComponent("\(number).part"), options: .atomic)
+                    done.insert(number)
+                    received += Int64(data.count)
+                    let finished = done.count
+                    let now = Date()
+                    let elapsed = now.timeIntervalSince(window.0)
+                    let speed: UInt64? = elapsed >= 1 ? UInt64(max(0, Double(received - window.1) / elapsed)) : nil
+                    if speed != nil { window = (now, received) }
+                    let total = Int64(Double(received) / Double(finished) * Double(count))
+                    let snapshot = received
+                    await MainActor.run {
+                        guard let self, let index = self.index(id), self.downloads[index].generation == item.generation else { return }
+                        if !self.downloads[index].completedParts.contains(number) { self.downloads[index].completedParts.append(number) }
+                        self.downloads[index].receivedBytes = snapshot
+                        self.downloads[index].totalBytes = max(total, snapshot)
+                        if let speed { self.downloads[index].speed = speed }
+                        if self.downloads[index].state == .preparing { self.downloads[index].state = .downloading }
+                        self.publish(id, persist: finished % 10 == 0 || finished == count)
+                    }
+                }
+                let finalSize = received
+                await MainActor.run {
+                    guard let self, let index = self.index(id), self.downloads[index].generation == item.generation else { return }
+                    self.hlsTasks[id] = nil
+                    self.downloads[index].completedParts = Array(0..<count)
+                    self.downloads[index].totalBytes = finalSize
+                    self.assemble(id)
+                }
+            } catch is CancellationError {
+            } catch {
+                if (error as? URLError)?.code == .cancelled { return }
+                await MainActor.run {
+                    guard let self, let index = self.index(id), self.downloads[index].generation == item.generation else { return }
                     self.fail(id, error.localizedDescription)
                 }
             }

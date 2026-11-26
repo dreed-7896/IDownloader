@@ -18,13 +18,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Stash"
+            "value" : "Drift"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stash"
+            "value" : "Drift"
           }
         }
       }
@@ -36,7 +36,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Stash uses the local network to discover playback devices and cast video on your network."
+            "value" : "Drift uses the local network to discover playback devices and cast video on your network."
           }
         }
       }

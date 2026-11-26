@@ -78,7 +78,7 @@ struct AddDownloadSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                hint("film", "Web page", "Stash finds the video on the page and remembers the page.")
+                hint("film", "Web page", "Drift finds the video on the page and remembers the page.")
                 hint("doc", "File link", "Downloads with up to 16 parallel connections.")
                 hint("point.3.connected.trianglepath.dotted", "Magnet", "Starts a torrent.")
             }

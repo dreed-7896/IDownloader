@@ -170,7 +170,7 @@ extension Session.Settings {
         let preferences = PreferencesStorage.shared
 
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
-        settings.agentName = "Stash/\(appVersion)"
+        settings.agentName = "Drift/\(appVersion)"
         settings.peerFingerprint = peerFingerprint(for: appVersion)
 
         settings.maxActiveTorrents = -1

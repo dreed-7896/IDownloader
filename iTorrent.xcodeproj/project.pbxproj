@@ -2271,7 +2271,7 @@
 				DEVELOPMENT_TEAM = D59DHVRS87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iTorrent/Core/Assets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Stash;
+				INFOPLIST_KEY_CFBundleDisplayName = Drift;
 				INFOPLIST_KEY_CFBundleName = Stash;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
@@ -2423,7 +2423,7 @@
 				"DEVELOPMENT_TEAM[sdk=xros*]" = D59DHVRS87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iTorrent/Core/Assets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Stash;
+				INFOPLIST_KEY_CFBundleDisplayName = Drift;
 				INFOPLIST_KEY_CFBundleName = Stash;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
@@ -2675,7 +2675,7 @@
 				DEVELOPMENT_TEAM = D59DHVRS87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iTorrent/Core/Assets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Stash;
+				INFOPLIST_KEY_CFBundleDisplayName = Drift;
 				INFOPLIST_KEY_CFBundleName = Stash;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;

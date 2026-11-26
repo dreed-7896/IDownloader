@@ -1,7 +1,7 @@
 {
   "images": [
     {
-      "filename": "Stash.png",
+      "filename": "Drift.png",
       "idiom": "universal",
       "platform": "ios",
       "size": "1024x1024"
@@ -13,7 +13,7 @@
           "value": "dark"
         }
       ],
-      "filename": "Stash.png",
+      "filename": "Drift.png",
       "idiom": "universal",
       "platform": "ios",
       "size": "1024x1024"

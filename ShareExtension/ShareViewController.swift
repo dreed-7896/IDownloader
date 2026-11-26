@@ -46,7 +46,7 @@ final class ShareViewController: UIViewController {
         primary.baseForegroundColor = .black
         primary.cornerStyle = .fixed
         primary.background.cornerRadius = 0
-        primary.title = "Open Stash"
+        primary.title = "Open Drift"
         actionButton.configuration = primary
         actionButton.isHidden = true
         actionButton.addTarget(self, action: #selector(openAgain), for: .touchUpInside)
@@ -147,7 +147,7 @@ final class ShareViewController: UIViewController {
 
     private func start() {
         guard !links.isEmpty else {
-            statusLabel.text = "Share a web page, a file link or a magnet link to save it with Stash."
+            statusLabel.text = "Share a web page, a file link or a magnet link to save it with Drift."
             closeButton.configuration?.title = "Close"
             return
         }
@@ -158,7 +158,7 @@ final class ShareViewController: UIViewController {
             // No shared container: carry the links in the URL instead.
             handoff = SharedDownloadInbox.handoffURL(for: links)
         }
-        statusLabel.text = links.count == 1 ? "Opening Stash…" : "Opening Stash with \(links.count) links…"
+        statusLabel.text = links.count == 1 ? "Opening Drift…" : "Opening Drift with \(links.count) links…"
         openApp(handoff) { [weak self] opened in
             guard let self else { return }
             if opened {
@@ -174,7 +174,7 @@ final class ShareViewController: UIViewController {
 
     private func showFallback(_ handoff: URL) {
         pendingHandoff = handoff
-        statusLabel.text = "Saved to Stash. Open Stash to start the download."
+        statusLabel.text = "Saved to Drift. Open Drift to start the download."
         actionButton.isHidden = false
         closeButton.configuration?.title = "Done"
     }
@@ -185,7 +185,7 @@ final class ShareViewController: UIViewController {
             if opened { self?.done() }
             else {
                 UIPasteboard.general.string = self?.links.map(\.url.absoluteString).joined(separator: "\n")
-                self?.statusLabel.text = "iOS didn't open Stash. The link is copied: open Stash and tap +."
+                self?.statusLabel.text = "iOS didn't open Drift. The link is copied: open Drift and tap +."
             }
         }
     }

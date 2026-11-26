@@ -316,7 +316,7 @@ private extension TorrentListViewController {
                         config.imageProperties.tintColor = SColor.mint
                         config.text = "Your stash is empty"
                         config.textProperties.font = SFont.display(24, .heavy) ?? .systemFont(ofSize: 24, weight: .heavy)
-                        config.secondaryText = "Share a page or link to Stash from any app, or tap + to paste one."
+                        config.secondaryText = "Share a page or link to Drift from any app, or tap + to paste one."
                         contentUnavailableConfiguration = config
                     case .badSearch:
                         contentUnavailableConfiguration = UIContentUnavailableConfiguration.search()

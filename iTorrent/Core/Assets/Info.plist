@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>NSFaceIDUsageDescription</key>
-    <string>Use Face ID to unlock Stash and protect your downloaded files.</string>
+    <string>Use Face ID to unlock Drift and protect your downloaded files.</string>
 	<key>CFBundleName</key>
-	<string>Stash</string>
+	<string>Drift</string>
 	<key>CFBundleDisplayName</key>
-	<string>Stash</string>
+	<string>Drift</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.dreed7896.IDownloader.refresh</string>
