@@ -2,12 +2,15 @@
 //  BrowserViewController.swift
 //  Drift
 //
-//  The Browser tab: address bar, web content, a bottom bar (back, forward, share, tabs, menu)
-//  and a floating download button that lists the videos found on the page.
+//  The whole app around the page: web content above one bottom dock. The dock holds the
+//  address field (with the ad-block shield) and Back, Forward/Home, Menu, Downloads and Tabs.
+//  It tucks away while scrolling down and rides on top of the keyboard while typing.
+//  A floating button appears when the page has a video to save.
 //
 
 import Combine
 import LibTorrent
+import MvvmFoundation
 import SwiftUI
 import UIKit
 import WebKit
@@ -17,43 +20,45 @@ final class BrowserViewController: UIViewController {
     private var tabSubscriptions = Set<AnyCancellable>()
     private var subscriptions = Set<AnyCancellable>()
 
-    // Top bar
-    private let topBar = UIView()
-    private let addressBox = UIView()
-    private let addressIcon = UIImageView()
-    private let addressField = UITextField()
-    private let reloadButton = UIButton(type: .system)
-    private let cancelButton = UIButton(type: .system)
-    private let progressView = UIProgressView(progressViewStyle: .bar)
-
     // Content
     private let contentView = UIView()
     private var startPage: UIHostingController<StartPageView>?
     private let suggestionsView = UITableView(frame: .zero, style: .plain)
     private var suggestions: [BrowserHistoryEntry] = []
+    private weak var shownWebView: WKWebView?
+    private var scrollObservation: NSKeyValueObservation?
+    private var lastScrollOffset: CGFloat = 0
 
-    // Bottom bar
-    private let bottomBar = UIView()
+    // Dock
+    private let dock = UIView()
+    private let dockFill = UIView()
+    private let progressView = UIProgressView(progressViewStyle: .bar)
+    private let addressBox = UIView()
+    private let shieldButton = UIButton(type: .system)
+    private let addressField = UITextField()
+    private let reloadButton = UIButton(type: .system)
+    private let cancelButton = UIButton(type: .system)
+    private let buttonRow = UIStackView()
     private let backButton = UIButton(type: .system)
     private let forwardButton = UIButton(type: .system)
-    private let shareButton = UIButton(type: .system)
-    private let tabsButton = UIButton(type: .system)
     private let menuButton = UIButton(type: .system)
+    private let downloadsButton = UIButton(type: .system)
+    private let downloadsBadge = UILabel()
+    private let tabsButton = UIButton(type: .system)
+    private var isDockCollapsed = false
 
-    // Download button
-    private let downloadButton = UIButton(type: .custom)
-    private let downloadBadge = UILabel()
+    // Video button
+    private let videoButton = UIButton(type: .custom)
+    private let videoBadge = UILabel()
 
-    private weak var shownWebView: WKWebView?
     private var isEditingAddress = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = SColor.bg
-        buildTopBar()
-        buildBottomBar()
+        buildDock()
         buildContent()
-        buildDownloadButton()
+        buildVideoButton()
         buildSuggestions()
 
         session.$selectedID.removeDuplicates().receive(on: DispatchQueue.main)
@@ -65,36 +70,74 @@ final class BrowserViewController: UIViewController {
         NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
             .sink { [weak self] _ in self?.session.save() }
             .store(in: &subscriptions)
-        BrowserStore.shared.$adBlockEnabled.dropFirst().removeDuplicates()
-            .sink { [weak self] enabled in self?.applyAdBlock(enabled) }
+        let store = BrowserStore.shared
+        Publishers.CombineLatest(store.$adBlockEnabled, store.$adBlockAllowlist).dropFirst()
+            .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
+            .sink { [weak self] _, _ in self?.refreshAdBlock(reload: true) }
+            .store(in: &subscriptions)
+        store.$darkPages.dropFirst().removeDuplicates()
+            .sink { [weak self] enabled in self?.applyDarkPages(enabled) }
+            .store(in: &subscriptions)
+        AppRootController.current?.$activeDownloads.receive(on: DispatchQueue.main)
+            .sink { [weak self] count in self?.updateDownloadsBadge(count) }
             .store(in: &subscriptions)
 
-        Task { @MainActor in
-            await AdBlockCache.prepare()
-            if BrowserStore.shared.adBlockEnabled { applyAdBlock(true, reload: false) }
-        }
+        AdBlocker.refreshListIfNeeded()
+        refreshAdBlock(reload: false)
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .default }
 
     // MARK: - Layout
 
-    private func buildTopBar() {
-        topBar.backgroundColor = SColor.bg
-        topBar.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(topBar)
+    private func iconButton(_ button: UIButton, _ symbol: String, label: String, size: CGFloat = 19) {
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: size, weight: .semibold))
+        configuration.baseForegroundColor = SColor.text
+        configuration.contentInsets = .zero
+        button.configuration = configuration
+        button.accessibilityLabel = label
+        button.configurationUpdateHandler = { button in
+            var updated = button.configuration
+            updated?.baseForegroundColor = button.isEnabled ? SColor.text : SColor.text3.withAlphaComponent(0.45)
+            button.configuration = updated
+        }
+    }
 
-        addressBox.backgroundColor = SColor.s1
+    private func buildDock() {
+        dockFill.backgroundColor = SColor.s1
+        dockFill.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(dockFill)
+
+        dock.backgroundColor = SColor.s1
+        dock.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(dock)
+
+        let line = UIView()
+        line.backgroundColor = SColor.line2
+        line.translatesAutoresizingMaskIntoConstraints = false
+        dock.addSubview(line)
+
+        progressView.trackTintColor = .clear
+        progressView.alpha = 0
+        progressView.translatesAutoresizingMaskIntoConstraints = false
+        dock.addSubview(progressView)
+
+        // Address box: shield | field | reload
+        addressBox.backgroundColor = SColor.s2
         addressBox.layer.borderWidth = 1
         addressBox.layer.borderColor = SColor.line2.cgColor
         addressBox.translatesAutoresizingMaskIntoConstraints = false
-        topBar.addSubview(addressBox)
 
-        addressIcon.image = UIImage(systemName: "magnifyingglass")
-        addressIcon.tintColor = SColor.text3
-        addressIcon.contentMode = .scaleAspectFit
-        addressIcon.preferredSymbolConfiguration = .init(pointSize: 14, weight: .semibold)
-        addressIcon.translatesAutoresizingMaskIntoConstraints = false
+        iconButton(shieldButton, "shield.lefthalf.filled", label: "Ad blocker", size: 16)
+        shieldButton.showsMenuAsPrimaryAction = true
+        shieldButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
+            completion(self?.shieldMenu() ?? [])
+        }])
+
+        let divider = UIView()
+        divider.backgroundColor = SColor.line2
+        divider.translatesAutoresizingMaskIntoConstraints = false
 
         addressField.placeholder = "Search or enter address"
         addressField.font = SFont.ui(16, .medium) ?? .systemFont(ofSize: 16, weight: .medium)
@@ -108,155 +151,103 @@ final class BrowserViewController: UIViewController {
         addressField.textContentType = .URL
         addressField.delegate = self
         addressField.addTarget(self, action: #selector(addressChanged), for: .editingChanged)
-        addressField.translatesAutoresizingMaskIntoConstraints = false
 
-        configureIconButton(reloadButton, "arrow.clockwise", label: "Reload")
+        iconButton(reloadButton, "arrow.clockwise", label: "Reload", size: 16)
         reloadButton.addTarget(self, action: #selector(reloadOrStop), for: .touchUpInside)
+
+        let inner = UIStackView(arrangedSubviews: [shieldButton, divider, addressField, reloadButton])
+        inner.spacing = 10
+        inner.alignment = .center
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        addressBox.addSubview(inner)
 
         var cancel = UIButton.Configuration.plain()
         var cancelTitle = AttributedString("Cancel")
         cancelTitle.font = SFont.ui(15, .semibold) ?? .systemFont(ofSize: 15, weight: .semibold)
         cancel.attributedTitle = cancelTitle
-        cancel.contentInsets = .init(top: 0, leading: 10, bottom: 0, trailing: 2)
+        cancel.contentInsets = .init(top: 0, leading: 12, bottom: 0, trailing: 2)
         cancelButton.configuration = cancel
         cancelButton.isHidden = true
         cancelButton.addTarget(self, action: #selector(cancelEditing), for: .touchUpInside)
         cancelButton.setContentHuggingPriority(.required, for: .horizontal)
         cancelButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        let inner = UIStackView(arrangedSubviews: [addressIcon, addressField, reloadButton])
-        inner.spacing = 8
-        inner.alignment = .center
-        inner.translatesAutoresizingMaskIntoConstraints = false
-        addressBox.addSubview(inner)
+        let addressRow = UIStackView(arrangedSubviews: [addressBox, cancelButton])
+        addressRow.alignment = .fill
+        addressRow.isLayoutMarginsRelativeArrangement = true
+        addressRow.directionalLayoutMargins = .init(top: 10, leading: 12, bottom: 6, trailing: 12)
 
-        let row = UIStackView(arrangedSubviews: [addressBox, cancelButton])
-        row.spacing = 4
-        row.alignment = .fill
-        row.translatesAutoresizingMaskIntoConstraints = false
-        topBar.addSubview(row)
+        // Buttons: back, forward/home, menu, downloads, tabs
+        iconButton(backButton, "chevron.left", label: "Back")
+        iconButton(forwardButton, "chevron.right", label: "Forward")
+        iconButton(menuButton, "line.3.horizontal", label: "Menu", size: 20)
+        iconButton(downloadsButton, "arrow.down.to.line", label: "Downloads")
+        backButton.addTarget(self, action: #selector(goBack), for: .touchUpInside)
+        forwardButton.addTarget(self, action: #selector(goForwardOrHome), for: .touchUpInside)
+        menuButton.addTarget(self, action: #selector(showMenu), for: .touchUpInside)
+        downloadsButton.addTarget(self, action: #selector(showDownloads), for: .touchUpInside)
+        tabsButton.addTarget(self, action: #selector(showTabs), for: .touchUpInside)
+        tabsButton.accessibilityLabel = "Tabs"
+        backButton.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(backLongPress(_:))))
+        let tabsHold = UILongPressGestureRecognizer(target: self, action: #selector(tabsLongPress(_:)))
+        tabsButton.addGestureRecognizer(tabsHold)
 
-        progressView.progressTintColor = view.tintColor
-        progressView.trackTintColor = .clear
-        progressView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(progressView)
+        downloadsBadge.font = SFont.mono(10, .bold) ?? .monospacedSystemFont(ofSize: 10, weight: .bold)
+        downloadsBadge.textAlignment = .center
+        downloadsBadge.isHidden = true
+        downloadsBadge.translatesAutoresizingMaskIntoConstraints = false
+        downloadsButton.addSubview(downloadsBadge)
 
-        let line = UIView()
-        line.backgroundColor = SColor.line
-        line.translatesAutoresizingMaskIntoConstraints = false
-        topBar.addSubview(line)
+        for button in [backButton, forwardButton, menuButton, downloadsButton, tabsButton] { buttonRow.addArrangedSubview(button) }
+        buttonRow.distribution = .fillEqually
+        buttonRow.heightAnchor.constraint(equalToConstant: 48).isActive = true
+
+        let stack = UIStackView(arrangedSubviews: [addressRow, buttonRow])
+        stack.axis = .vertical
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        dock.addSubview(stack)
 
         NSLayoutConstraint.activate([
-            topBar.topAnchor.constraint(equalTo: view.topAnchor),
-            topBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            topBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            dock.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            dock.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            dock.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            dockFill.topAnchor.constraint(equalTo: dock.bottomAnchor),
+            dockFill.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            dockFill.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            dockFill.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            row.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 6),
-            row.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
-            row.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
-            row.bottomAnchor.constraint(equalTo: topBar.bottomAnchor, constant: -8),
+            line.topAnchor.constraint(equalTo: dock.topAnchor),
+            line.leadingAnchor.constraint(equalTo: dock.leadingAnchor),
+            line.trailingAnchor.constraint(equalTo: dock.trailingAnchor),
+            line.heightAnchor.constraint(equalToConstant: 1),
+            progressView.topAnchor.constraint(equalTo: dock.topAnchor),
+            progressView.leadingAnchor.constraint(equalTo: dock.leadingAnchor),
+            progressView.trailingAnchor.constraint(equalTo: dock.trailingAnchor),
+            progressView.heightAnchor.constraint(equalToConstant: 2),
+
+            stack.topAnchor.constraint(equalTo: dock.topAnchor, constant: 1),
+            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: dock.bottomAnchor, constant: -2),
+
             addressBox.heightAnchor.constraint(equalToConstant: 44),
-
-            inner.leadingAnchor.constraint(equalTo: addressBox.leadingAnchor, constant: 12),
+            inner.leadingAnchor.constraint(equalTo: addressBox.leadingAnchor, constant: 4),
             inner.trailingAnchor.constraint(equalTo: addressBox.trailingAnchor, constant: -4),
             inner.topAnchor.constraint(equalTo: addressBox.topAnchor),
             inner.bottomAnchor.constraint(equalTo: addressBox.bottomAnchor),
-            addressIcon.widthAnchor.constraint(equalToConstant: 18),
+            shieldButton.widthAnchor.constraint(equalToConstant: 36),
+            shieldButton.heightAnchor.constraint(equalToConstant: 36),
+            divider.widthAnchor.constraint(equalToConstant: 1),
+            divider.heightAnchor.constraint(equalToConstant: 22),
             reloadButton.widthAnchor.constraint(equalToConstant: 36),
             reloadButton.heightAnchor.constraint(equalToConstant: 36),
 
-            line.leadingAnchor.constraint(equalTo: topBar.leadingAnchor),
-            line.trailingAnchor.constraint(equalTo: topBar.trailingAnchor),
-            line.bottomAnchor.constraint(equalTo: topBar.bottomAnchor),
-            line.heightAnchor.constraint(equalToConstant: 1),
-
-            progressView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            progressView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            progressView.topAnchor.constraint(equalTo: topBar.bottomAnchor),
-            progressView.heightAnchor.constraint(equalToConstant: 2)
+            downloadsBadge.centerXAnchor.constraint(equalTo: downloadsButton.centerXAnchor, constant: 13),
+            downloadsBadge.centerYAnchor.constraint(equalTo: downloadsButton.centerYAnchor, constant: -10),
+            downloadsBadge.heightAnchor.constraint(equalToConstant: 16),
+            downloadsBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 16)
         ])
-    }
-
-    private func configureIconButton(_ button: UIButton, _ symbol: String, label: String) {
-        var configuration = UIButton.Configuration.plain()
-        configuration.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold))
-        configuration.baseForegroundColor = SColor.text
-        configuration.contentInsets = .zero
-        button.configuration = configuration
-        button.accessibilityLabel = label
-        button.configurationUpdateHandler = { button in
-            var updated = button.configuration
-            updated?.baseForegroundColor = button.isEnabled ? SColor.text : SColor.text3.withAlphaComponent(0.5)
-            button.configuration = updated
-        }
-    }
-
-    private func buildBottomBar() {
-        bottomBar.backgroundColor = SColor.s1
-        bottomBar.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(bottomBar)
-
-        let line = UIView()
-        line.backgroundColor = SColor.line2
-        line.translatesAutoresizingMaskIntoConstraints = false
-        bottomBar.addSubview(line)
-
-        configureIconButton(backButton, "chevron.left", label: "Back")
-        configureIconButton(forwardButton, "chevron.right", label: "Forward")
-        configureIconButton(shareButton, "square.and.arrow.up", label: "Share")
-        configureIconButton(menuButton, "ellipsis", label: "Menu")
-        backButton.addTarget(self, action: #selector(goBack), for: .touchUpInside)
-        forwardButton.addTarget(self, action: #selector(goForward), for: .touchUpInside)
-        shareButton.addTarget(self, action: #selector(shareTapped), for: .touchUpInside)
-        tabsButton.addTarget(self, action: #selector(showTabs), for: .touchUpInside)
-        tabsButton.accessibilityLabel = "Tabs"
-        menuButton.showsMenuAsPrimaryAction = true
-        menuButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
-            completion(self?.menuElements() ?? [])
-        }])
-
-        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(backLongPress(_:)))
-        backButton.addGestureRecognizer(longPress)
-
-        let stack = UIStackView(arrangedSubviews: [backButton, forwardButton, shareButton, tabsButton, menuButton])
-        stack.distribution = .fillEqually
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        bottomBar.addSubview(stack)
-
-        NSLayoutConstraint.activate([
-            bottomBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            bottomBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bottomBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            line.topAnchor.constraint(equalTo: bottomBar.topAnchor),
-            line.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor),
-            line.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor),
-            line.heightAnchor.constraint(equalToConstant: 1),
-            stack.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 1),
-            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
-            stack.heightAnchor.constraint(equalToConstant: 48),
-            stack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
-        ])
-    }
-
-    private func updateTabsButton(count: Int) {
-        var configuration = UIButton.Configuration.plain()
-        var title = AttributedString(count > 99 ? ":D" : "\(count)")
-        title.font = SFont.mono(13, .bold) ?? .monospacedSystemFont(ofSize: 13, weight: .bold)
-        configuration.attributedTitle = title
-        configuration.baseForegroundColor = SColor.text
-        configuration.background.strokeColor = SColor.text
-        configuration.background.strokeWidth = 1.5
-        configuration.background.cornerRadius = 0
-        configuration.cornerStyle = .fixed
-        configuration.contentInsets = .init(top: 3, leading: 6, bottom: 3, trailing: 6)
-        let isPrivate = session.selected?.isPrivate == true
-        if isPrivate {
-            configuration.background.backgroundColor = SColor.text
-            configuration.baseForegroundColor = SColor.bg
-        }
-        tabsButton.configuration = configuration
-        tabsButton.accessibilityValue = "\(count) tabs"
+        updateTabsButton(count: session.tabs.count)
     }
 
     private func buildContent() {
@@ -264,52 +255,52 @@ final class BrowserViewController: UIViewController {
         contentView.translatesAutoresizingMaskIntoConstraints = false
         view.insertSubview(contentView, at: 0)
         NSLayoutConstraint.activate([
-            contentView.topAnchor.constraint(equalTo: progressView.topAnchor),
+            contentView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: bottomBar.topAnchor)
+            contentView.bottomAnchor.constraint(equalTo: dock.topAnchor)
         ])
     }
 
-    private func buildDownloadButton() {
+    private func buildVideoButton() {
         var configuration = UIButton.Configuration.filled()
         configuration.image = UIImage(systemName: "arrow.down.to.line", withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .bold))
         configuration.cornerStyle = .fixed
         configuration.background.cornerRadius = 0
-        downloadButton.configuration = configuration
-        downloadButton.configurationUpdateHandler = { button in
+        videoButton.configuration = configuration
+        videoButton.configurationUpdateHandler = { button in
             var updated = button.configuration
             updated?.baseBackgroundColor = button.tintColor
             updated?.baseForegroundColor = SColor.onAccent
             button.configuration = updated
             button.alpha = button.isHighlighted ? 0.8 : 1
         }
-        downloadButton.accessibilityLabel = "Download video"
-        downloadButton.layer.shadowColor = UIColor.black.cgColor
-        downloadButton.layer.shadowOpacity = 0.35
-        downloadButton.layer.shadowRadius = 10
-        downloadButton.layer.shadowOffset = CGSize(width: 0, height: 4)
-        downloadButton.addTarget(self, action: #selector(showMedia), for: .touchUpInside)
-        downloadButton.translatesAutoresizingMaskIntoConstraints = false
-        downloadButton.isHidden = true
-        view.addSubview(downloadButton)
+        videoButton.accessibilityLabel = "Save video"
+        videoButton.layer.shadowColor = UIColor.black.cgColor
+        videoButton.layer.shadowOpacity = 0.35
+        videoButton.layer.shadowRadius = 10
+        videoButton.layer.shadowOffset = CGSize(width: 0, height: 4)
+        videoButton.addTarget(self, action: #selector(showMedia), for: .touchUpInside)
+        videoButton.translatesAutoresizingMaskIntoConstraints = false
+        videoButton.isHidden = true
+        view.addSubview(videoButton)
 
-        downloadBadge.font = SFont.mono(11, .bold) ?? .monospacedSystemFont(ofSize: 11, weight: .bold)
-        downloadBadge.textColor = SColor.bg
-        downloadBadge.backgroundColor = SColor.text
-        downloadBadge.textAlignment = .center
-        downloadBadge.translatesAutoresizingMaskIntoConstraints = false
-        downloadButton.addSubview(downloadBadge)
+        videoBadge.font = SFont.mono(11, .bold) ?? .monospacedSystemFont(ofSize: 11, weight: .bold)
+        videoBadge.textColor = SColor.bg
+        videoBadge.backgroundColor = SColor.text
+        videoBadge.textAlignment = .center
+        videoBadge.translatesAutoresizingMaskIntoConstraints = false
+        videoButton.addSubview(videoBadge)
 
         NSLayoutConstraint.activate([
-            downloadButton.widthAnchor.constraint(equalToConstant: 56),
-            downloadButton.heightAnchor.constraint(equalToConstant: 56),
-            downloadButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-            downloadButton.bottomAnchor.constraint(equalTo: bottomBar.topAnchor, constant: -16),
-            downloadBadge.topAnchor.constraint(equalTo: downloadButton.topAnchor, constant: -6),
-            downloadBadge.trailingAnchor.constraint(equalTo: downloadButton.trailingAnchor, constant: 6),
-            downloadBadge.heightAnchor.constraint(equalToConstant: 20),
-            downloadBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 20)
+            videoButton.widthAnchor.constraint(equalToConstant: 56),
+            videoButton.heightAnchor.constraint(equalToConstant: 56),
+            videoButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            videoButton.bottomAnchor.constraint(equalTo: dock.topAnchor, constant: -16),
+            videoBadge.topAnchor.constraint(equalTo: videoButton.topAnchor, constant: -6),
+            videoBadge.trailingAnchor.constraint(equalTo: videoButton.trailingAnchor, constant: 6),
+            videoBadge.heightAnchor.constraint(equalToConstant: 20),
+            videoBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 20)
         ])
     }
 
@@ -324,11 +315,89 @@ final class BrowserViewController: UIViewController {
         suggestionsView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(suggestionsView)
         NSLayoutConstraint.activate([
-            suggestionsView.topAnchor.constraint(equalTo: progressView.bottomAnchor),
+            suggestionsView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             suggestionsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             suggestionsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            suggestionsView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            suggestionsView.bottomAnchor.constraint(equalTo: dock.topAnchor)
         ])
+    }
+
+    // MARK: - Dock state
+
+    private func updateTabsButton(count: Int) {
+        var configuration = UIButton.Configuration.plain()
+        var title = AttributedString(count > 99 ? "∞" : "\(count)")
+        title.font = SFont.mono(13, .bold) ?? .monospacedSystemFont(ofSize: 13, weight: .bold)
+        configuration.attributedTitle = title
+        configuration.background.strokeWidth = 2
+        configuration.background.cornerRadius = 0
+        configuration.cornerStyle = .fixed
+        configuration.contentInsets = .init(top: 2, leading: 6, bottom: 2, trailing: 6)
+        if session.selected?.isPrivate == true {
+            configuration.background.backgroundColor = SColor.text
+            configuration.background.strokeColor = SColor.text
+            configuration.baseForegroundColor = SColor.s1
+        } else {
+            configuration.background.strokeColor = SColor.text
+            configuration.baseForegroundColor = SColor.text
+        }
+        tabsButton.configuration = configuration
+        tabsButton.accessibilityValue = "\(count) tabs"
+    }
+
+    private func updateDownloadsBadge(_ count: Int) {
+        downloadsBadge.isHidden = count == 0
+        downloadsBadge.text = count > 9 ? " 9+ " : " \(count) "
+        downloadsBadge.backgroundColor = view.tintColor
+        downloadsBadge.textColor = SColor.onAccent
+    }
+
+    private func updateShield() {
+        let tab = session.selected
+        let page = tab?.isHome == true ? nil : tab?.url
+        let active = BrowserStore.shared.isAdBlockActive(on: page)
+        shieldButton.configuration?.image = UIImage(systemName: active ? "shield.lefthalf.filled" : "shield.slash",
+                                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold))
+        shieldButton.tintColor = active ? view.tintColor : SColor.text3
+        shieldButton.configurationUpdateHandler = { button in
+            var updated = button.configuration
+            updated?.baseForegroundColor = active ? button.tintColor : SColor.text3
+            button.configuration = updated
+        }
+        shieldButton.setNeedsUpdateConfiguration()
+        shieldButton.accessibilityValue = active ? "On" : "Off"
+    }
+
+    private func updateNavigationButtons() {
+        guard let tab = session.selected else { return }
+        let onPage = tab.isWebViewLoaded && !tab.isHome
+        backButton.isEnabled = tab.isHome ? tab.isWebViewLoaded : tab.canGoBack
+        let showsForward = onPage && tab.canGoForward
+        let symbol = showsForward || !onPage ? "chevron.right" : "house"
+        forwardButton.configuration?.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold))
+        forwardButton.accessibilityLabel = symbol == "house" ? "Home" : "Forward"
+        forwardButton.isEnabled = onPage || (tab.isHome && tab.canGoForward)
+    }
+
+    private func setDockCollapsed(_ collapsed: Bool, animated: Bool = true) {
+        guard collapsed != isDockCollapsed, !(collapsed && isEditingAddress) else { return }
+        isDockCollapsed = collapsed
+        let changes = {
+            self.buttonRow.isHidden = collapsed
+            self.buttonRow.alpha = collapsed ? 0 : 1
+            self.videoButton.alpha = collapsed ? 0.85 : 1
+            self.view.layoutIfNeeded()
+        }
+        if animated { UIView.animate(withDuration: 0.22, delay: 0, options: [.beginFromCurrentState, .curveEaseOut], animations: changes) } else { changes() }
+    }
+
+    private func scrolled(_ scrollView: UIScrollView) {
+        let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        defer { lastScrollOffset = offset }
+        guard scrollView.isDragging || scrollView.isDecelerating else { return }
+        let delta = offset - lastScrollOffset
+        let atBottom = offset + scrollView.bounds.height >= scrollView.contentSize.height + scrollView.adjustedContentInset.bottom - 4
+        if offset <= 8 { setDockCollapsed(false) } else if atBottom { return } else if delta > 6 { setDockCollapsed(true) } else if delta < -10 { setDockCollapsed(false) }
     }
 
     // MARK: - Tabs
@@ -336,81 +405,81 @@ final class BrowserViewController: UIViewController {
     private func showSelectedTab() {
         guard let tab = session.selected else { return }
         tabSubscriptions.removeAll()
+        scrollObservation = nil
         shownWebView?.removeFromSuperview()
         shownWebView = nil
+        setDockCollapsed(false, animated: false)
 
-        if tab.url == nil && tab.pendingURL == nil && !tab.isWebViewLoaded {
-            showStartPage(for: tab)
-        } else {
-            attachWebView(of: tab)
-        }
+        if tab.isWebViewLoaded || tab.pendingURL != nil { attachWebView(of: tab) }
+        updateStartPage()
 
         tab.$url.combineLatest(tab.$title).receive(on: DispatchQueue.main)
-            .sink { [weak self] _, _ in self?.updateAddressField() }
+            .sink { [weak self] _, _ in self?.updateAddressField(); self?.updateShield() }
             .store(in: &tabSubscriptions)
         tab.$progress.combineLatest(tab.$isLoading).receive(on: DispatchQueue.main)
             .sink { [weak self] progress, loading in self?.updateProgress(progress, loading: loading) }
             .store(in: &tabSubscriptions)
-        tab.$canGoBack.combineLatest(tab.$canGoForward).receive(on: DispatchQueue.main)
-            .sink { [weak self] back, forward in
-                guard let self else { return }
-                self.backButton.isEnabled = back
-                self.forwardButton.isEnabled = forward
-            }
+        tab.$canGoBack.combineLatest(tab.$canGoForward, tab.$isHome).receive(on: DispatchQueue.main)
+            .sink { [weak self] _, _, _ in self?.updateNavigationButtons(); self?.updateStartPage(); self?.updateAddressField() }
             .store(in: &tabSubscriptions)
-        tab.$media.receive(on: DispatchQueue.main)
-            .sink { [weak self] media in self?.updateDownloadButton(media) }
+        tab.$media.combineLatest(tab.$isHome).receive(on: DispatchQueue.main)
+            .sink { [weak self] media, home in self?.updateVideoButton(home ? [] : media) }
             .store(in: &tabSubscriptions)
         updateTabsButton(count: session.tabs.count)
+        updateShield()
     }
 
-    private func showStartPage(for tab: BrowserTab) {
-        if startPage == nil {
-            let host = UIHostingController(rootView: makeStartPage(isPrivate: tab.isPrivate))
-            host.view.backgroundColor = SColor.bg
-            addChild(host)
-            host.view.translatesAutoresizingMaskIntoConstraints = false
-            contentView.addSubview(host.view)
-            NSLayoutConstraint.activate([
-                host.view.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2),
-                host.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-                host.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-                host.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
-            ])
-            host.didMove(toParent: self)
-            startPage = host
-        } else {
-            startPage?.rootView = makeStartPage(isPrivate: tab.isPrivate)
+    /// The start page shows for a fresh tab and when Home is pressed.
+    private func updateStartPage() {
+        guard let tab = session.selected else { return }
+        let showHome = tab.isHome || (!tab.isWebViewLoaded && tab.pendingURL == nil)
+        if showHome {
+            if startPage == nil {
+                let host = UIHostingController(rootView: makeStartPage(isPrivate: tab.isPrivate))
+                host.view.backgroundColor = SColor.bg
+                addChild(host)
+                host.view.translatesAutoresizingMaskIntoConstraints = false
+                contentView.addSubview(host.view)
+                NSLayoutConstraint.activate([
+                    host.view.topAnchor.constraint(equalTo: contentView.topAnchor),
+                    host.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                    host.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+                    host.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+                ])
+                host.didMove(toParent: self)
+                startPage = host
+            } else {
+                startPage?.rootView = makeStartPage(isPrivate: tab.isPrivate)
+            }
+            contentView.bringSubviewToFront(startPage!.view)
+        } else if let startPage {
+            startPage.willMove(toParent: nil)
+            startPage.view.removeFromSuperview()
+            startPage.removeFromParent()
+            self.startPage = nil
         }
-        startPage?.view.isHidden = false
     }
 
     private func makeStartPage(isPrivate: Bool) -> StartPageView {
-        StartPageView(isPrivate: isPrivate, onOpen: { [weak self] url in self?.open(url) },
-                      onSearch: { [weak self] in self?.addressField.becomeFirstResponder() })
-    }
-
-    private func hideStartPage() {
-        guard let startPage else { return }
-        startPage.willMove(toParent: nil)
-        startPage.view.removeFromSuperview()
-        startPage.removeFromParent()
-        self.startPage = nil
+        StartPageView(isPrivate: isPrivate,
+                      onOpen: { [weak self] url in self?.open(url) },
+                      onAdd: { [weak self] in self?.promptAddFavorite() })
     }
 
     private func attachWebView(of tab: BrowserTab) {
-        hideStartPage()
         let webView = tab.webView
         webView.navigationDelegate = self
         webView.uiDelegate = self
-        webView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(webView)
-        NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2),
-            webView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            webView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
-        ])
+        if webView.superview !== contentView {
+            webView.translatesAutoresizingMaskIntoConstraints = false
+            contentView.addSubview(webView)
+            NSLayoutConstraint.activate([
+                webView.topAnchor.constraint(equalTo: contentView.topAnchor),
+                webView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                webView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+                webView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+            ])
+        }
         if webView.scrollView.refreshControl == nil {
             let refresh = UIRefreshControl()
             refresh.addAction(UIAction { [weak webView, weak refresh] _ in
@@ -420,7 +489,11 @@ final class BrowserViewController: UIViewController {
             webView.scrollView.refreshControl = refresh
         }
         shownWebView = webView
-        view.bringSubviewToFront(downloadButton)
+        lastScrollOffset = webView.scrollView.contentOffset.y
+        scrollObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
+            self?.scrolled(scrollView)
+        }
+        view.bringSubviewToFront(videoButton)
         view.bringSubviewToFront(suggestionsView)
     }
 
@@ -435,6 +508,7 @@ final class BrowserViewController: UIViewController {
             return
         }
         guard let tab = session.selected else { return }
+        tab.isHome = false
         let wasLoaded = tab.isWebViewLoaded
         if !wasLoaded {
             tab.pendingURL = url
@@ -442,25 +516,21 @@ final class BrowserViewController: UIViewController {
         }
         if !wasLoaded || shownWebView !== tab.webView { attachWebView(of: tab) }
         if wasLoaded { tab.load(url) }
+        updateStartPage()
         updateAddressField()
     }
 
-    // MARK: - State
-
     private func updateAddressField() {
         guard !isEditingAddress, let tab = session.selected else { return }
-        let url = tab.url
+        let url = tab.isHome ? nil : tab.url
         if let url, url.scheme == "https" || url.scheme == "http" {
             var host = url.host ?? url.absoluteString
             if host.hasPrefix("www.") { host.removeFirst(4) }
             addressField.text = host
-            addressIcon.image = UIImage(systemName: url.scheme == "https" ? "lock.fill" : "exclamationmark.triangle")
         } else {
             addressField.text = url?.absoluteString
-            addressIcon.image = UIImage(systemName: tab.isPrivate ? "eyeglasses" : "magnifyingglass")
         }
-        addressField.placeholder = tab.isPrivate ? "Private · Search or enter address" : "Search or enter address"
-        shareButton.isEnabled = url != nil
+        addressField.placeholder = tab.isPrivate ? "Private · Search or enter address" : "Search \(BrowserStore.shared.searchEngine.title) or enter address"
         reloadButton.isHidden = url == nil
     }
 
@@ -476,20 +546,21 @@ final class BrowserViewController: UIViewController {
             }
         }
         let symbol = loading ? "xmark" : "arrow.clockwise"
-        reloadButton.configuration?.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold))
+        reloadButton.configuration?.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold))
         reloadButton.accessibilityLabel = loading ? "Stop" : "Reload"
+        if loading { setDockCollapsed(false) }
     }
 
-    private func updateDownloadButton(_ media: [DetectedMedia]) {
+    private func updateVideoButton(_ media: [DetectedMedia]) {
         let count = media.count
-        let wasHidden = downloadButton.isHidden
-        downloadButton.isHidden = count == 0
-        downloadBadge.text = count > 1 ? " \(count) " : nil
-        downloadBadge.isHidden = count <= 1
+        let wasHidden = videoButton.isHidden
+        videoButton.isHidden = count == 0
+        videoBadge.text = count > 1 ? " \(count) " : nil
+        videoBadge.isHidden = count <= 1
         if wasHidden, count > 0 {
-            downloadButton.transform = CGAffineTransform(scaleX: 0.4, y: 0.4)
+            videoButton.transform = CGAffineTransform(scaleX: 0.4, y: 0.4)
             UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.55, initialSpringVelocity: 0.8) {
-                self.downloadButton.transform = .identity
+                self.videoButton.transform = .identity
             }
         }
     }
@@ -500,6 +571,7 @@ final class BrowserViewController: UIViewController {
         suggestions = BrowserStore.shared.suggestions(for: addressField.text ?? "")
         suggestionsView.reloadData()
         suggestionsView.isHidden = suggestions.isEmpty
+        if !suggestions.isEmpty { view.bringSubviewToFront(suggestionsView) }
     }
 
     @objc private func cancelEditing() {
@@ -513,12 +585,21 @@ final class BrowserViewController: UIViewController {
 
     @objc private func goBack() {
         guard let tab = session.selected, tab.isWebViewLoaded else { return }
+        if tab.isHome { tab.isHome = false; updateStartPage(); return }
         if tab.webView.canGoBack { tab.webView.goBack() }
     }
 
-    @objc private func goForward() {
-        guard let tab = session.selected, tab.isWebViewLoaded else { return }
-        tab.webView.goForward()
+    @objc private func goForwardOrHome() {
+        guard let tab = session.selected else { return }
+        if tab.isHome {
+            tab.isHome = false
+            if tab.isWebViewLoaded, tab.webView.canGoForward { tab.webView.goForward() }
+        } else if tab.isWebViewLoaded, tab.webView.canGoForward {
+            tab.webView.goForward()
+        } else {
+            tab.isHome = true
+        }
+        updateStartPage()
     }
 
     @objc private func backLongPress(_ gesture: UILongPressGestureRecognizer) {
@@ -528,6 +609,7 @@ final class BrowserViewController: UIViewController {
         let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
         for item in items {
             sheet.addAction(UIAlertAction(title: item.title?.isEmpty == false ? item.title : item.url.host, style: .default) { _ in
+                tab.isHome = false
                 tab.webView.go(to: item)
             })
         }
@@ -536,11 +618,22 @@ final class BrowserViewController: UIViewController {
         present(sheet, animated: true)
     }
 
-    @objc private func shareTapped() {
-        guard let url = session.selected?.url else { return }
-        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        controller.popoverPresentationController?.sourceView = shareButton
-        present(controller, animated: true)
+    @objc private func tabsLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "New tab", style: .default) { [weak self] _ in self?.session.newTab() })
+        sheet.addAction(UIAlertAction(title: "New private tab", style: .default) { [weak self] _ in self?.session.newTab(isPrivate: true) })
+        if let tab = session.selected {
+            sheet.addAction(UIAlertAction(title: "Close this tab", style: .destructive) { [weak self] _ in self?.session.close(tab.id) })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = tabsButton
+        present(sheet, animated: true)
+    }
+
+    @objc private func showDownloads() {
+        addressField.resignFirstResponder()
+        AppRootController.current?.showDownloads()
     }
 
     @objc private func showTabs() {
@@ -553,7 +646,7 @@ final class BrowserViewController: UIViewController {
             host.modalPresentationStyle = .fullScreen
             self.present(host, animated: true)
         }
-        if let tab = session.selected { tab.takeSnapshot(completion: present) } else { present() }
+        if let tab = session.selected, !tab.isHome { tab.takeSnapshot(completion: present) } else { present() }
     }
 
     @objc private func showMedia() {
@@ -574,63 +667,125 @@ final class BrowserViewController: UIViewController {
         present(host, animated: true)
     }
 
-    private func menuElements() -> [UIMenuElement] {
-        let store = BrowserStore.shared
-        let tab = session.selected
-        let url = tab?.url
-        var elements: [UIMenuElement] = []
+    // MARK: - Menu
 
-        elements.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: "New tab", image: UIImage(systemName: "plus.square")) { [weak self] _ in
-                self?.session.newTab()
-            },
-            UIAction(title: "New private tab", image: UIImage(systemName: "eyeglasses")) { [weak self] _ in
-                self?.session.newTab(isPrivate: true)
-            }
-        ]))
-
-        var pageActions: [UIMenuElement] = []
-        if let url, let tab {
-            let bookmarked = store.isBookmarked(url)
-            pageActions.append(UIAction(title: bookmarked ? "Remove bookmark" : "Add bookmark",
-                                        image: UIImage(systemName: bookmarked ? "star.slash" : "star")) { _ in
-                store.toggleBookmark(title: tab.title, url: url)
-            })
-            if #available(iOS 16.0, *) {
-                pageActions.append(UIAction(title: "Find on page", image: UIImage(systemName: "doc.text.magnifyingglass")) { _ in
-                    tab.webView.findInteraction?.presentFindNavigator(showingReplace: false)
-                })
-            }
-            pageActions.append(UIAction(title: "Desktop site", image: UIImage(systemName: "desktopcomputer"),
-                                        state: tab.desktopMode ? .on : .off) { _ in
-                tab.setDesktopMode(!tab.desktopMode)
-            })
-            pageActions.append(UIAction(title: "Copy link", image: UIImage(systemName: "link")) { _ in
-                UIPasteboard.general.url = url
-            })
+    @objc private func showMenu() {
+        addressField.resignFirstResponder()
+        guard let tab = session.selected else { return }
+        let page = tab.isHome ? nil : tab.url.flatMap { ["http", "https"].contains($0.scheme?.lowercased() ?? "") ? $0 : nil }
+        let state = BrowserMenuState(title: page == nil ? "Drift" : (tab.title.isEmpty ? page?.host ?? "" : tab.title),
+                                     url: page, iconURL: tab.iconURL, isPrivate: tab.isPrivate,
+                                     desktopMode: tab.desktopMode, darkPages: BrowserStore.shared.darkPages,
+                                     adBlockOnSite: BrowserStore.shared.isAdBlockActive(on: page),
+                                     isBookmarked: BrowserStore.shared.isBookmarked(page),
+                                     isFavorite: BrowserStore.shared.isFavorite(page))
+        weak var hostRef: UIHostingController<BrowserMenuView>?
+        let menu = BrowserMenuView(state: state) { [weak self] action in
+            hostRef?.dismiss(animated: true) { self?.handleMenu(action, tab: tab, page: page) }
         }
-        pageActions.append(UIAction(title: "Bookmarks & history", image: UIImage(systemName: "book")) { [weak self] _ in
-            self?.showLibrary()
-        })
-        elements.append(UIMenu(options: .displayInline, children: pageActions))
-
-        let engines = SearchEngine.allCases.map { engine in
-            UIAction(title: engine.title, state: store.searchEngine == engine ? .on : .off) { _ in store.searchEngine = engine }
+        let host = UIHostingController(rootView: menu)
+        hostRef = host
+        host.view.backgroundColor = SColor.s1
+        if let presentation = host.sheetPresentationController {
+            presentation.detents = [.medium(), .large()]
+            presentation.prefersGrabberVisible = true
         }
-        elements.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: "Block ads", image: UIImage(systemName: "shield.lefthalf.filled"),
-                     state: store.adBlockEnabled ? .on : .off) { _ in store.adBlockEnabled.toggle() },
-            UIMenu(title: "Search engine", image: UIImage(systemName: "magnifyingglass"), children: engines),
-            UIAction(title: "Clear browsing data", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
-                self?.confirmClearData()
-            }
-        ]))
-        return elements
+        present(host, animated: true)
     }
 
-    private func showLibrary() {
+    private func handleMenu(_ action: BrowserMenuAction, tab: BrowserTab, page: URL?) {
+        let store = BrowserStore.shared
+        switch action {
+        case .share:
+            guard let page else { return }
+            let controller = UIActivityViewController(activityItems: [page], applicationActivities: nil)
+            controller.popoverPresentationController?.sourceView = menuButton
+            present(controller, animated: true)
+        case .toggleSiteAdBlock:
+            store.setAdBlock(!store.isAdBlockActive(on: page), on: page)
+            updateShield()
+        case .toggleAdBlock:
+            store.adBlockEnabled.toggle()
+            updateShield()
+        case .desktop:
+            tab.setDesktopMode(!tab.desktopMode)
+        case .darkPages:
+            store.darkPages.toggle()
+        case .find:
+            if #available(iOS 16.0, *), tab.isWebViewLoaded {
+                tab.webView.findInteraction?.presentFindNavigator(showingReplace: false)
+            }
+        case .newTab:
+            session.newTab()
+        case .newPrivateTab:
+            session.newTab(isPrivate: true)
+        case .openInPrivate:
+            if let page { session.newTab(url: page, isPrivate: true) }
+        case .bookmarks:
+            showLibrary(section: 0)
+        case .history:
+            showLibrary(section: 1)
+        case .files:
+            presentInNavigation(FileBrowserViewController())
+        case .settings:
+            presentInNavigation(PreferencesViewModel().resolveVC())
+        case .downloads:
+            AppRootController.current?.showDownloads()
+        case .toggleBookmark:
+            if let page {
+                store.toggleBookmark(title: tab.title, url: page, iconURL: tab.iconURL)
+                toast(store.isBookmarked(page) ? "Bookmarked" : "Bookmark removed")
+            }
+        case .addToStartPage:
+            if let page {
+                store.addFavorite(title: tab.title, url: page, iconURL: tab.iconURL)
+                if let icon = tab.iconURL { SiteIconCache.shared.store(iconURL: icon, for: page) }
+                toast("Added to start page")
+            }
+        case .copyLink:
+            if let page { UIPasteboard.general.url = page; toast("Link copied") }
+        case .clearData:
+            confirmClearData()
+        case .searchEngine(let engine):
+            store.searchEngine = engine
+            updateAddressField()
+        }
+    }
+
+    private func presentInNavigation(_ controller: UIViewController) {
+        let navigation = UINavigationController.resolve()
+        navigation.viewControllers = [controller]
+        let close = UIBarButtonItem(image: UIImage(systemName: "xmark"), primaryAction: UIAction { [weak navigation] _ in
+            navigation?.dismiss(animated: true)
+        })
+        close.accessibilityLabel = "Close"
+        controller.navigationItem.leadingItemGroups.insert(.fixedGroup(items: [close]), at: 0)
+        present(navigation, animated: true)
+    }
+
+    private func shieldMenu() -> [UIMenuElement] {
+        let store = BrowserStore.shared
+        let tab = session.selected
+        let page = tab?.isHome == true ? nil : tab?.url
+        var items: [UIMenuElement] = []
+        if let page, let host = BrowserStore.siteKey(page), store.adBlockEnabled {
+            let active = store.isAdBlockActive(on: page)
+            items.append(UIAction(title: active ? "Allow ads on \(host)" : "Block ads on \(host)",
+                                  image: UIImage(systemName: active ? "shield.slash" : "shield.lefthalf.filled")) { [weak self] _ in
+                store.setAdBlock(!active, on: page)
+                self?.updateShield()
+            })
+        }
+        items.append(UIAction(title: "Ad blocker", image: UIImage(systemName: "shield"), state: store.adBlockEnabled ? .on : .off) { [weak self] _ in
+            store.adBlockEnabled.toggle()
+            self?.updateShield()
+        })
+        return [UIMenu(title: "Blocks ads, trackers, video ads and pop-ups", children: items)]
+    }
+
+    private func showLibrary(section: Int) {
         weak var hostRef: UIHostingController<LibraryView>?
-        let view = LibraryView(onOpen: { [weak self] url in
+        let view = LibraryView(initialSection: section, onOpen: { [weak self] url in
             hostRef?.dismiss(animated: true)
             self?.open(url)
         }, onClose: { hostRef?.dismiss(animated: true) })
@@ -638,6 +793,25 @@ final class BrowserViewController: UIViewController {
         hostRef = host
         host.view.backgroundColor = SColor.bg
         present(host, animated: true)
+    }
+
+    private func promptAddFavorite() {
+        let alert = UIAlertController(title: "Add to start page", message: nil, preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = "Name" }
+        alert.addTextField {
+            $0.placeholder = "Address"
+            $0.keyboardType = .URL
+            $0.autocapitalizationType = .none
+            $0.autocorrectionType = .no
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Add", style: .default) { [weak alert] _ in
+            let name = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespaces) ?? ""
+            let text = alert?.textFields?.last?.text ?? ""
+            guard !text.isEmpty, let url = BrowserStore.shared.url(for: text), url.host != nil else { return }
+            BrowserStore.shared.favorites.append(BrowserBookmark(title: name.isEmpty ? (url.host ?? text) : name, url: url))
+        })
+        present(alert, animated: true)
     }
 
     private func confirmClearData() {
@@ -654,14 +828,32 @@ final class BrowserViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    private func applyAdBlock(_ enabled: Bool, reload: Bool = true) {
-        guard let list = AdBlockCache.list else { return }
-        for tab in session.tabs where tab.isWebViewLoaded {
-            let controller = tab.webView.configuration.userContentController
-            controller.remove(list)
-            if enabled { controller.add(list) }
-            if reload, tab === session.selected { tab.webView.reload() }
+    // MARK: - Ad block & page scripts
+
+    private func refreshAdBlock(reload: Bool) {
+        Task { @MainActor in
+            let list = await AdBlockCache.prepare()
+            for tab in session.tabs where tab.isWebViewLoaded {
+                let controller = tab.webView.configuration.userContentController
+                controller.removeAllContentRuleLists()
+                if BrowserStore.shared.adBlockEnabled, let list { controller.add(list) }
+                PageScripts.install(on: controller)
+                if reload, tab === session.selected, !tab.isHome { tab.webView.reload() }
+            }
+            updateShield()
         }
+    }
+
+    private func applyDarkPages(_ enabled: Bool) {
+        for tab in session.tabs where tab.isWebViewLoaded {
+            PageScripts.install(on: tab.webView.configuration.userContentController)
+            tab.webView.evaluateJavaScript(enabled ? PageScripts.darkPages : PageScripts.removeDarkPages)
+        }
+    }
+
+    private static func site(_ host: String?) -> String? {
+        guard let parts = host?.lowercased().split(separator: "."), parts.count >= 2 else { return host?.lowercased() }
+        return parts.suffix(2).joined(separator: ".")
     }
 
     // MARK: - Downloads
@@ -675,7 +867,7 @@ final class BrowserViewController: UIViewController {
             let id = FileDownloadService.shared.add(media.url, page: tab.isPrivate ? nil : page, title: title,
                                                     kind: media.kind == .hls ? .hls : .file, headers: headers)
             if id != nil {
-                toast("Saving to Downloads", action: "View") { RootTabBarController.current?.showDownloads() }
+                toast("Saving to Downloads", action: "View") { AppRootController.current?.showDownloads() }
             } else {
                 toast("This video can't be downloaded")
             }
@@ -695,7 +887,7 @@ final class BrowserViewController: UIViewController {
             } else {
                 await FileDownloadService.shared.add(SharedLink(url: url, page: nil, title: nil))
             }
-            toast("Saving to Downloads", action: "View") { RootTabBarController.current?.showDownloads() }
+            toast("Saving to Downloads", action: "View") { AppRootController.current?.showDownloads() }
         }
     }
 
@@ -712,7 +904,7 @@ final class BrowserViewController: UIViewController {
         let scheme = url.scheme?.lowercased() ?? ""
         if scheme == "magnet" {
             (view.window?.windowScene?.delegate as? SceneDelegate)?.processURL(url)
-            toast("Torrent added", action: "View") { RootTabBarController.current?.showDownloads() }
+            toast("Torrent added", action: "View") { AppRootController.current?.showDownloads() }
             return
         }
         UIApplication.shared.open(url)
@@ -760,9 +952,9 @@ final class BrowserViewController: UIViewController {
             stack.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 14),
             stack.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -14),
             box.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
-            box.trailingAnchor.constraint(equalTo: downloadButton.isHidden ? view.safeAreaLayoutGuide.trailingAnchor : downloadButton.leadingAnchor,
+            box.trailingAnchor.constraint(equalTo: videoButton.isHidden ? view.safeAreaLayoutGuide.trailingAnchor : videoButton.leadingAnchor,
                                           constant: -16),
-            box.bottomAnchor.constraint(equalTo: bottomBar.topAnchor, constant: -16)
+            box.bottomAnchor.constraint(equalTo: dock.topAnchor, constant: -16)
         ])
         toastView = box
         box.alpha = 0
@@ -778,12 +970,17 @@ final class BrowserViewController: UIViewController {
 extension BrowserViewController: UITextFieldDelegate {
     func textFieldDidBeginEditing(_ textField: UITextField) {
         isEditingAddress = true
-        textField.text = session.selected?.url?.absoluteString
+        setDockCollapsed(false, animated: false)
+        let tab = session.selected
+        textField.text = tab?.isHome == true ? nil : tab?.url?.absoluteString
         DispatchQueue.main.async { textField.selectAll(nil) }
         addressBox.layer.borderColor = view.tintColor.cgColor
         UIView.animate(withDuration: 0.2) {
             self.cancelButton.isHidden = false
             self.reloadButton.isHidden = true
+            self.buttonRow.isHidden = true
+            self.buttonRow.alpha = 0
+            self.view.layoutIfNeeded()
         }
     }
 
@@ -791,7 +988,13 @@ extension BrowserViewController: UITextFieldDelegate {
         isEditingAddress = false
         addressBox.layer.borderColor = SColor.line2.cgColor
         suggestionsView.isHidden = true
-        UIView.animate(withDuration: 0.2) { self.cancelButton.isHidden = true }
+        UIView.animate(withDuration: 0.2) {
+            self.cancelButton.isHidden = true
+            self.buttonRow.isHidden = false
+            self.buttonRow.alpha = 1
+            self.view.layoutIfNeeded()
+        }
+        isDockCollapsed = false
         updateAddressField()
     }
 
@@ -817,7 +1020,9 @@ extension BrowserViewController: UITableViewDataSource, UITableViewDelegate {
         content.textProperties.color = SColor.text
         content.secondaryTextProperties.font = SFont.mono(12, .medium) ?? .monospacedSystemFont(ofSize: 12, weight: .medium)
         content.secondaryTextProperties.color = SColor.text3
-        content.image = UIImage(systemName: entry.date == .distantPast ? "star" : "clock")
+        content.image = SiteIconCache.shared.cached(for: entry.url) ?? UIImage(systemName: entry.date == .distantPast ? "star" : "clock")
+        content.imageProperties.maximumSize = CGSize(width: 28, height: 28)
+        content.imageProperties.reservedLayoutSize = CGSize(width: 28, height: 28)
         content.imageProperties.tintColor = SColor.text3
         cell.contentConfiguration = content
         cell.backgroundColor = SColor.bg
@@ -842,6 +1047,12 @@ extension BrowserViewController: WKNavigationDelegate, WKUIDelegate {
         if !["http", "https", "about", "data", "blob", "file", "javascript"].contains(scheme) {
             decisionHandler(.cancel, preferences)
             handleExternal(url)
+            return
+        }
+        // Ad-network redirects in the main frame (click-jacking ads) are dropped.
+        if navigationAction.targetFrame?.isMainFrame == true, navigationAction.navigationType != .linkActivated,
+           BrowserStore.shared.isAdBlockActive(on: webView.url), AdBlocker.isAdHost(url.host) {
+            decisionHandler(.cancel, preferences)
             return
         }
         if navigationAction.shouldPerformDownload {
@@ -876,15 +1087,20 @@ extension BrowserViewController: WKNavigationDelegate, WKUIDelegate {
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        session.tab(for: webView)?.resetMedia()
+        guard let tab = session.tab(for: webView) else { return }
+        tab.resetMedia()
+        tab.iconURL = nil
+        if tab.isHome, tab === session.selected { tab.isHome = false }
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         session.tab(for: webView)?.captureUserAgent()
+        if webView === shownWebView { setDockCollapsed(false) }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard let tab = session.tab(for: webView), let url = webView.url else { return }
+        tab.captureIcon()
         if !tab.isPrivate { BrowserStore.shared.record(title: webView.title, url: url) }
         session.save()
     }
@@ -899,8 +1115,8 @@ extension BrowserViewController: WKNavigationDelegate, WKUIDelegate {
 
     private func showLoadError(_ error: Error, in webView: WKWebView) {
         let nsError = error as NSError
-        // Cancelled loads and "frame load interrupted" (a download took over) are not errors.
-        if nsError.code == NSURLErrorCancelled || (nsError.domain == "WebKitErrorDomain" && [102, 204].contains(nsError.code)) { return }
+        // Cancelled loads, interrupted frames (a download took over) and blocked content are not errors to show.
+        if nsError.code == NSURLErrorCancelled || (nsError.domain == "WebKitErrorDomain" && [102, 104, 204].contains(nsError.code)) { return }
         guard webView === shownWebView else { return }
         toast(nsError.localizedDescription)
     }
@@ -912,6 +1128,22 @@ extension BrowserViewController: WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         let opener = session.tab(for: webView)
+        let target = navigationAction.request.url
+        // Pop-up blocking: ad servers always; other sites' pop-ups unless the user tapped a link.
+        if BrowserStore.shared.isAdBlockActive(on: webView.url) {
+            if AdBlocker.isAdHost(target?.host) { return nil }
+            let crossSite = Self.site(target?.host) != Self.site(webView.url?.host)
+            if navigationAction.navigationType != .linkActivated, crossSite || target?.host == nil {
+                if let target, target.host != nil {
+                    toast("Pop-up blocked", action: "Open") { [weak self] in
+                        self?.session.newTab(url: target, isPrivate: opener?.isPrivate ?? false, afterCurrent: true)
+                    }
+                } else {
+                    toast("Pop-up blocked")
+                }
+                return nil
+            }
+        }
         let tab = session.newTab(isPrivate: opener?.isPrivate ?? false, configuration: configuration, afterCurrent: true, select: false)
         let newWebView = tab.webView
         session.select(tab.id)
@@ -953,19 +1185,29 @@ extension BrowserViewController: WKNavigationDelegate, WKUIDelegate {
                  completionHandler: @escaping (UIContextMenuConfiguration?) -> Void) {
         guard let url = elementInfo.linkURL else { completionHandler(nil); return }
         let tab = session.tab(for: webView)
+        let isMedia = PageMediaResolver.mediaExtensions.contains(url.pathExtension.lowercased()) || HLSDownloader.isPlaylist(url)
         completionHandler(UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] suggested in
-            let actions: [UIMenuElement] = [
+            var actions: [UIMenuElement] = [
                 UIAction(title: "Open in new tab", image: UIImage(systemName: "plus.square.on.square")) { _ in
                     self?.session.newTab(url: url, isPrivate: tab?.isPrivate ?? false, afterCurrent: true, select: false)
                     self?.toast("Opened in a new tab")
                 },
-                UIAction(title: "Download link", image: UIImage(systemName: "arrow.down.circle")) { _ in
-                    self?.downloadLink(url, from: tab, isFile: false)
+                UIAction(title: "Open in private tab", image: UIImage(systemName: "eyeglasses")) { _ in
+                    self?.session.newTab(url: url, isPrivate: true, afterCurrent: true, select: false)
+                    self?.toast("Opened in a private tab")
+                },
+                UIAction(title: isMedia ? "Download video" : "Download link", image: UIImage(systemName: "arrow.down.to.line")) { _ in
+                    self?.downloadLink(url, from: tab, isFile: isMedia)
                 },
                 UIAction(title: "Copy link", image: UIImage(systemName: "doc.on.doc")) { _ in
                     UIPasteboard.general.url = url
                 }
             ]
+            if BrowserStore.shared.bookmarks.contains(where: { $0.url == url }) == false {
+                actions.append(UIAction(title: "Add to bookmarks", image: UIImage(systemName: "bookmark")) { _ in
+                    BrowserStore.shared.toggleBookmark(title: nil, url: url, iconURL: nil)
+                })
+            }
             return UIMenu(children: [UIMenu(options: .displayInline, children: actions)] + suggested)
         })
     }

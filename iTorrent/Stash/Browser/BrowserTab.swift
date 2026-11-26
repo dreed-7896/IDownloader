@@ -84,6 +84,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     var snapshot: UIImage?
     var desktopMode = false
+    /// The page's own icon, for bookmarks and favorites.
+    @Published var iconURL: URL?
+    /// The start page is shown over this tab's page.
+    @Published var isHome = false
     private(set) var userAgent: String?
     /// The URL to load when the web view is first created (restored tabs load lazily).
     var pendingURL: URL?
@@ -136,7 +140,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         configuration.mediaTypesRequiringUserActionForPlayback = .audio
         configuration.websiteDataStore = isPrivate ? privateStore : .default()
         let controller = WKUserContentController()
-        controller.addUserScript(MediaSniffer.userScript)
+        PageScripts.install(on: controller)
         controller.add(MediaMessageRouter.shared, name: MediaSniffer.handlerName)
         configuration.userContentController = controller
         if BrowserStore.shared.adBlockEnabled, let list = AdBlockCache.list { controller.add(list) }
@@ -185,6 +189,13 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         guard userAgent == nil, isWebViewLoaded else { return }
         if let custom = webView.customUserAgent { userAgent = custom; return }
         webView.evaluateJavaScript("navigator.userAgent") { [weak self] value, _ in self?.userAgent = value as? String }
+    }
+
+    func captureIcon() {
+        guard isWebViewLoaded else { return }
+        webView.evaluateJavaScript(PageScripts.bestIcon) { [weak self] value, _ in
+            self?.iconURL = (value as? String).flatMap(URL.init(string:))
+        }
     }
 
     func takeSnapshot(completion: (() -> Void)? = nil) {
@@ -312,14 +323,5 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             HTTPCookie.requestHeaderFields(with: matching).forEach { headers[$0.key] = $0.value }
         }
         return headers
-    }
-}
-
-/// The compiled ad-block list, loaded once at launch so new tabs can attach it synchronously.
-enum AdBlockCache {
-    static var list: WKContentRuleList?
-
-    static func prepare() async {
-        list = await AdBlocker.ruleList()
     }
 }

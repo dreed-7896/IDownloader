@@ -33,7 +33,7 @@ extension SceneDelegate {
             if tryOpenTorrentDetails(with: url) { return }
             if tryOpenAddTorrent(with: url) { return }
             if tryOpenAddMagnet(with: url) {
-                (window?.rootViewController as? RootTabBarController)?.showDownloads()
+                (window?.rootViewController as? AppRootController)?.showDownloads()
                 startSharedDownloads()
                 return
             }
@@ -54,7 +54,7 @@ extension SceneDelegate {
     }
 
     func showFileDownloads(selected: UUID? = nil) {
-        (window?.rootViewController as? RootTabBarController)?.showDownloads()
+        (window?.rootViewController as? AppRootController)?.showDownloads()
         guard let root = window?.rootViewController?.topPresented else { return }
         let navigation = root as? UINavigationController ?? root.navigationController
             ?? window?.downloadsSplitViewController?.viewControllers.first as? UINavigationController

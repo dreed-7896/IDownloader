@@ -12,6 +12,8 @@ struct BrowserBookmark: Codable, Hashable, Identifiable {
     var id = UUID()
     var title: String
     var url: URL
+    /// The site's own icon (apple-touch-icon or the largest favicon), when the page provided one.
+    var iconURL: URL?
 }
 
 struct BrowserHistoryEntry: Codable, Hashable, Identifiable {
@@ -55,7 +57,12 @@ enum SearchEngine: String, Codable, CaseIterable, Identifiable {
 final class BrowserStore: ObservableObject {
     static let shared = BrowserStore()
 
-    @Published var bookmarks: [BrowserBookmark] { didSet { save(bookmarks, "browser.bookmarks") } }
+    /// Sites on the start page.
+    @Published var favorites: [BrowserBookmark] { didSet { save(favorites, "browser.favorites") } }
+    @Published var bookmarks: [BrowserBookmark] { didSet { save(bookmarks, "browser.bookmarks.v2") } }
+    /// Sites where the ad blocker is off.
+    @Published var adBlockAllowlist: [String] { didSet { save(adBlockAllowlist, "browser.adBlockAllowlist") } }
+    @Published var darkPages: Bool { didSet { UserDefaults.standard.set(darkPages, forKey: "browser.darkPages") } }
     @Published private(set) var history: [BrowserHistoryEntry] { didSet { save(history, "browser.history") } }
     @Published var searchEngine: SearchEngine { didSet { save(searchEngine, "browser.searchEngine") } }
     @Published var adBlockEnabled: Bool { didSet { UserDefaults.standard.set(adBlockEnabled, forKey: "browser.adBlock") } }
@@ -63,21 +70,25 @@ final class BrowserStore: ObservableObject {
     private let defaults = UserDefaults.standard
 
     private init() {
-        bookmarks = Self.load("browser.bookmarks") ?? Self.defaultBookmarks
+        favorites = Self.load("browser.favorites") ?? Self.defaultFavorites
+        bookmarks = Self.load("browser.bookmarks.v2") ?? []
+        adBlockAllowlist = Self.load("browser.adBlockAllowlist") ?? []
+        darkPages = UserDefaults.standard.bool(forKey: "browser.darkPages")
         history = Self.load("browser.history") ?? []
         searchEngine = Self.load("browser.searchEngine") ?? .google
         adBlockEnabled = UserDefaults.standard.object(forKey: "browser.adBlock") as? Bool ?? true
     }
 
-    static let defaultBookmarks: [BrowserBookmark] = [
+    static let defaultFavorites: [BrowserBookmark] = [
         ("Google", "https://www.google.com"),
         ("YouTube", "https://m.youtube.com"),
+        ("Instagram", "https://www.instagram.com"),
+        ("X", "https://x.com"),
+        ("Facebook", "https://m.facebook.com"),
+        ("Reddit", "https://www.reddit.com"),
         ("Vimeo", "https://vimeo.com"),
         ("Dailymotion", "https://www.dailymotion.com"),
-        ("Reddit", "https://www.reddit.com"),
-        ("X", "https://x.com"),
-        ("Wikipedia", "https://www.wikipedia.org"),
-        ("Archive", "https://archive.org")
+        ("Wikipedia", "https://www.wikipedia.org")
     ].compactMap { title, link in URL(string: link).map { BrowserBookmark(title: title, url: $0) } }
 
     // MARK: - Address bar
@@ -100,7 +111,7 @@ final class BrowserStore: ObservableObject {
         let query = text.trimmingCharacters(in: .whitespaces).lowercased()
         guard !query.isEmpty else { return [] }
         var seen = Set<URL>()
-        let marks = bookmarks.map { BrowserHistoryEntry(title: $0.title, url: $0.url, date: .distantPast) }
+        let marks = (favorites + bookmarks).map { BrowserHistoryEntry(title: $0.title, url: $0.url, date: .distantPast) }
         return (marks + history).filter { entry in
             (entry.title.lowercased().contains(query) || entry.url.absoluteString.lowercased().contains(query))
                 && seen.insert(entry.url).inserted
@@ -114,13 +125,51 @@ final class BrowserStore: ObservableObject {
         return bookmarks.contains { $0.url == url }
     }
 
-    func toggleBookmark(title: String?, url: URL) {
+    func toggleBookmark(title: String?, url: URL, iconURL: URL?) {
         if let index = bookmarks.firstIndex(where: { $0.url == url }) {
             bookmarks.remove(at: index)
         } else {
-            let name = (title?.isEmpty == false ? title : nil) ?? url.host ?? url.absoluteString
-            bookmarks.append(BrowserBookmark(title: name, url: url))
+            bookmarks.insert(BrowserBookmark(title: Self.name(title, url), url: url, iconURL: iconURL), at: 0)
         }
+    }
+
+    func isFavorite(_ url: URL?) -> Bool {
+        guard let host = url?.host else { return false }
+        return favorites.contains { $0.url.host == host }
+    }
+
+    func addFavorite(title: String?, url: URL, iconURL: URL?) {
+        guard !isFavorite(url) else { return }
+        let short = url.host.map { host -> String in
+            let parts = host.replacingOccurrences(of: "www.", with: "").split(separator: ".")
+            return parts.first.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? host
+        }
+        favorites.append(BrowserBookmark(title: short ?? Self.name(title, url), url: url, iconURL: iconURL))
+    }
+
+    private static func name(_ title: String?, _ url: URL) -> String {
+        (title?.isEmpty == false ? title : nil) ?? url.host ?? url.absoluteString
+    }
+
+    // MARK: - Ad blocker sites
+
+    static func siteKey(_ url: URL?) -> String? {
+        guard var host = url?.host?.lowercased() else { return nil }
+        if host.hasPrefix("www.") { host.removeFirst(4) }
+        if host.hasPrefix("m.") { host.removeFirst(2) }
+        return host
+    }
+
+    func isAdBlockActive(on url: URL?) -> Bool {
+        guard adBlockEnabled else { return false }
+        guard let key = Self.siteKey(url) else { return true }
+        return !adBlockAllowlist.contains(key)
+    }
+
+    func setAdBlock(_ enabled: Bool, on url: URL?) {
+        guard let key = Self.siteKey(url) else { return }
+        adBlockAllowlist.removeAll { $0 == key }
+        if !enabled { adBlockAllowlist.append(key) }
     }
 
     // MARK: - History

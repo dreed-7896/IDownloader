@@ -1,6 +1,6 @@
 # Drift
 
-A minimal iOS web browser that saves the videos you watch, maintained by Raahat. It opens on the **Browser** tab; the **Downloads** tab holds everything the app did before (files, videos, torrents). Formerly Stash.
+A minimal iOS web browser that saves the videos you watch, maintained by Raahat. The browser fills the app; one bottom dock holds the address bar and Back, Forward/Home, Menu, Downloads and Tabs. Downloads (everything the app did before: files, videos, torrents) slides up from the dock. Formerly Stash.
 
 ## Install
 
@@ -20,11 +20,19 @@ Every successful build on `main` publishes a new IPA; the combined source picks 
 
 ## Browser
 
-- Address bar that searches (Google, DuckDuckGo, Bing or Brave) or opens addresses, with history and bookmark suggestions
-- Tabs, private tabs, a start page with favorites and recent sites, bookmarks and history
-- Back/forward (long-press Back for history), pull to refresh, share, find on page, desktop site
-- Built-in ad and pop-under blocker (on by default)
-- Long-press a link to open it in a new tab or download it; links the site marks as downloads go to Downloads
+- One bottom dock: address bar with the ad-block shield, then Back, Forward/Home, Menu, Downloads (with a running-downloads badge) and Tabs. It tucks away while you scroll down and sits on the keyboard while you type
+- Start page with your favorite sites as icon tiles; bookmarks and history with site icons
+- Menu sheet: ad blocker for this site, desktop site, dark pages, private tab, find on page, bookmarks, history, downloads, files, settings, search engine (Google, DuckDuckGo, Bing, Brave), clear browsing data
+- Tabs and private tabs (hold the tabs button for quick actions), long-press Back for history, pull to refresh
+- Long-press a link to open it in a new or private tab, download it or bookmark it
+
+### Ad blocker
+
+On by default; turn it off per site from the shield or the menu.
+
+- Blocks requests to ~3,600 ad, tracker and video-ad servers (bundled list, refreshed weekly from Peter Lowe's list), including video ad networks such as Google IMA, FreeWheel and SpotX
+- Hides common ad containers and YouTube ad slots, strips ads from YouTube's player data and skips any that still play
+- Blocks pop-ups and pop-unders from other sites (with an option to open one you wanted) and ad-network redirects
 
 ### Saving videos
 

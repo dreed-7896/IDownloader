@@ -29,133 +29,93 @@ private struct SquareIconButton: View {
     }
 }
 
-private struct SiteTile: View {
-    let title: String
-    let url: URL
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Text(initial)
-                .font(.sDisplay(24, .heavy))
-                .foregroundStyle(Color.sMint)
-                .frame(maxWidth: .infinity)
-                .aspectRatio(1, contentMode: .fit)
-                .background(Color.sS1)
-                .overlay(Rectangle().strokeBorder(Color.sLine2, lineWidth: 1))
-            Text(title)
-                .font(.sInter(12, .medium))
-                .foregroundStyle(Color.sText2)
-                .lineLimit(1)
-        }
-    }
-
-    private var initial: String {
-        let source = title.isEmpty ? (url.host ?? "?") : title
-        return String(source.prefix(1)).uppercased()
-    }
-}
-
 // MARK: - Start page
 
 struct StartPageView: View {
     var isPrivate: Bool
     var onOpen: (URL) -> Void
-    var onSearch: () -> Void
+    var onAdd: () -> Void
 
     @ObservedObject private var store = BrowserStore.shared
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 14), count: 4)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 4)
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(isPrivate ? "Private tab" : "Browse · Watch · Save").sLabel(12)
-                    Text(isPrivate ? "Nothing is kept." : "Drift")
-                        .font(.sDisplay(isPrivate ? 34 : 52, .heavy))
-                        .tracking(-1.2)
-                        .foregroundStyle(Color.sText)
-                    if isPrivate {
-                        Text("History, cookies and site data from private tabs are forgotten when you close them.")
-                            .font(.sInter(14))
-                            .foregroundStyle(Color.sText3)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: 34) {
+                    Spacer(minLength: max(24, proxy.size.height * 0.16))
+                    VStack(spacing: 10) {
+                        Text(isPrivate ? "Private" : "Drift")
+                            .font(.sDisplay(64, .heavy))
+                            .tracking(-2)
+                            .foregroundStyle(Color.sMint)
+                            .shadow(color: Color.sMint.opacity(0.55), radius: 24)
+                        Text(isPrivate ? "Nothing from this tab is kept" : "Browse · Watch · Save").sLabel(12)
                     }
-                }
 
-                Button(action: onSearch) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass").font(.system(size: 15, weight: .semibold))
-                        Text("Search \(store.searchEngine.title) or enter address")
-                            .font(.sInter(15, .medium))
-                        Spacer()
-                    }
-                    .foregroundStyle(Color.sText3)
-                    .padding(.horizontal, 14)
-                    .frame(height: 52)
-                    .background(Color.sS1)
-                    .overlay(Rectangle().strokeBorder(Color.sLine2, lineWidth: 1))
-                }
-                .buttonStyle(PressedOpacityStyle())
-
-                if !store.bookmarks.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Favorites").sLabel(12)
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            ForEach(store.bookmarks) { bookmark in
-                                Button { onOpen(bookmark.url) } label: { SiteTile(title: bookmark.title, url: bookmark.url) }
-                                    .buttonStyle(PressedOpacityStyle())
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            store.bookmarks.removeAll { $0.id == bookmark.id }
-                                        } label: { Label("Remove", systemImage: "trash") }
-                                    }
-                            }
-                        }
-                    }
-                }
-
-                if !isPrivate, !store.history.isEmpty {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Recent").sLabel(12).padding(.bottom, 10)
-                        ForEach(Array(store.history.prefix(6))) { entry in
-                            Button { onOpen(entry.url) } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "clock").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.sText3)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(entry.title).font(.sInter(15, .medium)).foregroundStyle(Color.sText).lineLimit(1)
-                                        Text(entry.url.host ?? entry.url.absoluteString).font(.sMono(11, .medium))
-                                            .foregroundStyle(Color.sText3).lineLimit(1)
-                                    }
-                                    Spacer()
+                    LazyVGrid(columns: columns, spacing: 18) {
+                        ForEach(store.favorites) { favorite in
+                            Button { onOpen(favorite.url) } label: {
+                                VStack(spacing: 8) {
+                                    SiteIcon(title: favorite.title, url: favorite.url, iconURL: favorite.iconURL, size: 62)
+                                    Text(favorite.title)
+                                        .font(.sInter(12, .medium))
+                                        .foregroundStyle(Color.sText2)
+                                        .lineLimit(1)
                                 }
-                                .padding(.vertical, 10)
-                                .contentShape(Rectangle())
                             }
                             .buttonStyle(PressedOpacityStyle())
-                            Rectangle().fill(Color.sLine).frame(height: 1)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    store.favorites.removeAll { $0.id == favorite.id }
+                                } label: { Label("Remove from start page", systemImage: "trash") }
+                            }
                         }
+                        Button(action: onAdd) {
+                            VStack(spacing: 8) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .foregroundStyle(Color.sText2)
+                                    .frame(width: 62, height: 62)
+                                    .background(Color.sS2)
+                                    .overlay(Rectangle().strokeBorder(Color.sLine2, lineWidth: 1))
+                                Text("Add").font(.sInter(12, .medium)).foregroundStyle(Color.sText3)
+                            }
+                        }
+                        .buttonStyle(PressedOpacityStyle())
+                        .accessibilityLabel("Add to start page")
                     }
-                }
+                    .padding(.horizontal, 20)
 
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "arrow.down.to.line")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Color.sOnAccent)
-                        .frame(width: 34, height: 34)
-                        .background(Color.sMint)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Save any video").font(.sInter(15, .bold)).foregroundStyle(Color.sText)
-                        Text("Play a video on any site. When the download button appears, tap it to save the video to Downloads.")
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "arrow.down.to.line")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color.sOnAccent)
+                            .frame(width: 30, height: 30)
+                            .background(Color.sMint)
+                        Text("Play a video on any site, then tap the green button to save it.")
                             .font(.sInter(13)).foregroundStyle(Color.sText3)
+                        Spacer(minLength: 0)
                     }
+                    .padding(12)
+                    .background(Color.sS1.opacity(0.7))
+                    .overlay(Rectangle().strokeBorder(Color.sLine, lineWidth: 1))
+                    .padding(.horizontal, 20)
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.sS1)
-                .overlay(Rectangle().strokeBorder(Color.sLine, lineWidth: 1))
+                .padding(.bottom, 24)
+                .frame(minHeight: proxy.size.height)
             }
-            .padding(20)
         }
-        .background(Color.sBg.ignoresSafeArea())
+        .background(
+            ZStack {
+                Color.sBg
+                RadialGradient(colors: [Color.sMint.opacity(isPrivate ? 0.10 : 0.22), .clear], center: UnitPoint(x: 0.25, y: 0.45),
+                               startRadius: 10, endRadius: 420)
+                RadialGradient(colors: [Color(red: 0.35, green: 0.25, blue: 0.75).opacity(0.22), .clear],
+                               center: UnitPoint(x: 0.85, y: 0.7), startRadius: 10, endRadius: 380)
+            }
+            .ignoresSafeArea()
+        )
     }
 }
 
@@ -378,7 +338,13 @@ struct LibraryView: View {
     var onClose: () -> Void
 
     @ObservedObject private var store = BrowserStore.shared
-    @State private var section = 0
+    @State private var section: Int
+
+    init(initialSection: Int = 0, onOpen: @escaping (URL) -> Void, onClose: @escaping () -> Void) {
+        self.onOpen = onOpen
+        self.onClose = onClose
+        _section = State(initialValue: initialSection)
+    }
     @State private var confirmClear = false
 
     var body: some View {
@@ -407,16 +373,16 @@ struct LibraryView: View {
 
             List {
                 if section == 0 {
-                    if store.bookmarks.isEmpty { empty("No bookmarks yet. Use Add bookmark in the menu.") }
+                    if store.bookmarks.isEmpty { empty("No bookmarks yet. Use Add to bookmarks in the menu.") }
                     ForEach(store.bookmarks) { bookmark in
-                        row(title: bookmark.title, url: bookmark.url, symbol: "star")
+                        row(title: bookmark.title, url: bookmark.url, iconURL: bookmark.iconURL)
                     }
                     .onDelete { store.bookmarks.remove(atOffsets: $0) }
                     .onMove { store.bookmarks.move(fromOffsets: $0, toOffset: $1) }
                 } else {
                     if store.history.isEmpty { empty("Pages you visit appear here.") }
                     ForEach(store.history) { entry in
-                        row(title: entry.title, url: entry.url, symbol: "clock")
+                        row(title: entry.title, url: entry.url, iconURL: nil)
                     }
                     .onDelete { offsets in store.removeHistory(Set(offsets.map { store.history[$0].id })) }
                 }
@@ -435,10 +401,10 @@ struct LibraryView: View {
         Text(text).font(.sInter(14)).foregroundStyle(Color.sText3).listRowBackground(Color.sBg)
     }
 
-    private func row(title: String, url: URL, symbol: String) -> some View {
+    private func row(title: String, url: URL, iconURL: URL?) -> some View {
         Button { onOpen(url) } label: {
             HStack(spacing: 12) {
-                Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.sText3)
+                SiteIcon(title: title, url: url, iconURL: iconURL, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.sInter(15, .medium)).foregroundStyle(Color.sText).lineLimit(1)
                     Text(url.absoluteString).font(.sMono(11, .medium)).foregroundStyle(Color.sText3).lineLimit(1)

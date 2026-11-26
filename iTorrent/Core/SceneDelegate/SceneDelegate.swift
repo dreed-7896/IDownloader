@@ -95,7 +95,7 @@ class SceneDelegate: MvvmSceneDelegate {
         let svc = UISplitViewController.resolve()
         svc.viewControllers = [nvc]
 
-        return RootTabBarController(downloads: svc)
+        return AppRootController(downloads: svc)
     }
 
     override func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
