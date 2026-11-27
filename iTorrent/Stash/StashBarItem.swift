@@ -12,11 +12,12 @@ enum StashBarItem {
     static func make(title: String?, systemImage: String, prominent: Bool = false, accessibilityLabel: String? = nil,
                      action: @escaping () -> Void) -> UIBarButtonItem {
         var configuration = prominent ? UIButton.Configuration.filled() : UIButton.Configuration.plain()
-        configuration.image = UIImage(systemName: systemImage,
-                                      withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold))
+        let hugeicon: [String: Icon] = ["folder": .folder, "gearshape": .settings, "plus": .add, "square.and.arrow.down": .saveVideo]
+        configuration.image = hugeicon[systemImage]?.image(21)
+            ?? UIImage(systemName: systemImage, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold))
         configuration.imagePadding = 7
         configuration.cornerStyle = .fixed
-        configuration.background.cornerRadius = 0
+        configuration.background.cornerRadius = 14
         configuration.background.strokeWidth = 1
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: title == nil ? 0 : 14, bottom: 0, trailing: title == nil ? 0 : 16)
         if let title {
@@ -34,8 +35,8 @@ enum StashBarItem {
                 updated?.background.strokeColor = accent
             } else {
                 updated?.baseForegroundColor = SColor.text
-                updated?.background.backgroundColor = SColor.s1
-                updated?.background.strokeColor = SColor.line2
+                updated?.background.backgroundColor = SColor.s2
+                updated?.background.strokeColor = UIColor.white.withAlphaComponent(0.07)
             }
             button.alpha = button.isHighlighted ? 0.65 : (button.isEnabled ? 1 : 0.4)
             button.configuration = updated

@@ -307,10 +307,6 @@ enum StashTheme {
         for (className, name) in [("UIBarButtonItem", "hidesSharedBackground"), ("UIScrollEdgeEffect", "isHidden")] {
             if let m = method(className, name) { method_setImplementation(m, imp_implementationWithBlock(yes)) }
         }
-        let zero: @convention(block) (AnyObject) -> CGFloat = { _ in 0 }
-        if let m = method("UISheetPresentationController", "preferredCornerRadius") {
-            method_setImplementation(m, imp_implementationWithBlock(zero))
-        }
     }
 
     /// A bordered square with a chevron: the boxy back button.
@@ -321,14 +317,13 @@ enum StashTheme {
         let image = UIGraphicsImageRenderer(size: CGSize(width: side + 6, height: side), format: format).image { context in
             let rect = CGRect(x: 0, y: 0, width: side, height: side)
             let traits = UITraitCollection(userInterfaceStyle: .dark)
-            SColor.s1.resolvedColor(with: traits).setFill()
-            UIBezierPath(rect: rect).fill()
-            SColor.line2.resolvedColor(with: traits).setStroke()
-            let border = UIBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
+            SColor.s2.resolvedColor(with: traits).setFill()
+            UIBezierPath(ovalIn: rect).fill()
+            UIColor.white.withAlphaComponent(0.08).setStroke()
+            let border = UIBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5))
             border.lineWidth = 1
             border.stroke()
-            let config = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
-            if let chevron = UIImage(systemName: "chevron.left", withConfiguration: config)?
+            if let chevron = (Icon.back.image(20) ?? UIImage(systemName: "chevron.left"))?
                 .withTintColor(SColor.text.resolvedColor(with: traits), renderingMode: .alwaysOriginal) {
                 let size = chevron.size
                 chevron.draw(in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2,

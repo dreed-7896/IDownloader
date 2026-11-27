@@ -953,6 +953,7 @@ final class BrowserViewController: UIViewController {
             let id = FileDownloadService.shared.add(media.url, page: tab.isPrivate ? nil : page, title: title,
                                                     kind: media.kind == .hls ? .hls : .file, headers: headers)
             if id != nil {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
                 toast("Saving to Downloads", action: "View") { AppRootController.current?.showDownloads() }
             } else {
                 toast("This video can't be downloaded")
