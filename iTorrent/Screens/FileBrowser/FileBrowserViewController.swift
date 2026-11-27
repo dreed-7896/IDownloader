@@ -35,8 +35,18 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
     private var torrentFiles: [String: IndexedTorrentFile] = [:]
     private var subscriptions = Set<AnyCancellable>()
     private var accessingScope = false
-    private let sortButton = UIBarButtonItem(title: "Sort", image: UIImage(systemName: "arrow.up.arrow.down"))
+    private let sortButton = UIBarButtonItem(title: "Sort", image: Icon.sort.image(22))
+    /// Item counts of the folders shown, read once per reload.
+    private var folderCounts: [URL: Int] = [:]
     var isToolbarItemsHidden: Bool { false }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        formatter.doesRelativeDateFormatting = true
+        return formatter
+    }()
 
     init(rootDirectory: URL = TorrentService.downloadPath, directory: URL? = nil, title: String? = nil) {
         self.rootDirectory = rootDirectory
@@ -58,7 +68,7 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
         navigationItem.largeTitleDisplayMode = .never
         tableView.backgroundColor = SColor.bg
         tableView.separatorColor = SColor.line
-        tableView.separatorInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 0)
+        tableView.tableFooterView = UIView()
         tableView.register(FileRowCell.self, forCellReuseIdentifier: FileRowCell.reuseIdentifier)
         tableView.register(StashSectionHeader.self, forHeaderFooterViewReuseIdentifier: StashSectionHeader.reuseIdentifier)
         tableView.sectionHeaderTopPadding = 0
@@ -67,15 +77,21 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
         search.searchBar.placeholder = "Search files"
         navigationItem.searchController = search
         definesPresentationContext = true
-        let videos = UIBarButtonItem(title: "Videos", image: UIImage(systemName: "play.rectangle.on.rectangle"),
-                                    primaryAction: UIAction { [weak self] _ in
+        let videos = UIBarButtonItem(title: "Videos", image: Icon.film.image(22),
+                                    primaryAction: UIAction(title: "Videos", image: Icon.film.image(22)) { [weak self] _ in
             self?.navigationController?.pushViewController(VideoGalleryViewController(), animated: true)
         })
+        videos.accessibilityLabel = "Video gallery"
         navigationItem.rightBarButtonItems = [sortButton, videos]
         configureSortMenu()
 
+        let newFolder = StashBarItem.make(title: "New folder", systemImage: "folder.badge.plus") { [weak self] in self?.createFolder() }
+        // Hugeicons glyph for the button (its style stays StashBarItem's).
+        if let button = newFolder.customView as? UIButton, let image = Icon.folderAdd.image(21) {
+            button.configuration?.image = image
+        }
         toolbarItems = [
-            StashBarItem.make(title: "New folder", systemImage: "folder.badge.plus") { [weak self] in self?.createFolder() },
+            newFolder,
             StashBarItem.gap(),
             StashBarItem.make(title: "Import", systemImage: "square.and.arrow.down") { [weak self] in self?.importFiles() },
             .flexibleSpace()
@@ -131,6 +147,7 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
 
     private func reloadFiles() {
         indexTorrentFiles()
+        folderCounts = [:]
         do {
             var files = try readEntries(at: directory)
             if directory.standardizedFileURL == TorrentService.downloadPath.standardizedFileURL {
@@ -167,8 +184,10 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
             tableView.reloadData()
             if entries.isEmpty && locations.isEmpty {
                 tableView.backgroundView = query.isEmpty
-                    ? StashEmptyView(kicker: "Files", title: "Nothing here yet", message: "Finished downloads land here. You can also import files.")
-                    : StashEmptyView(kicker: "Search", title: "No matches", message: "No files match “\(query)”.")
+                    ? StashEmptyView(icon: .folderOpen, title: "No files yet",
+                                     message: "Finished downloads appear here. You can also bring in files from the Files app.",
+                                     actionTitle: "Import files", action: { [weak self] in self?.importFiles() })
+                    : StashEmptyView(icon: .search, title: "No matches", message: "No files match “\(query)”.")
             } else {
                 tableView.backgroundView = nil
             }
@@ -181,7 +200,7 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
     }
 
     private func configureSortMenu() {
-        sortButton.menu = UIMenu(children: Sort.allCases.map { option in
+        sortButton.menu = UIMenu(title: "Sort by", children: Sort.allCases.map { option in
             UIAction(title: option.rawValue, state: sort == option ? .on : .off) { [weak self] _ in
                 self?.sort = option
                 self?.configureSortMenu()
@@ -198,7 +217,10 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
         guard let header = tableView.dequeueReusableHeaderFooterView(withIdentifier: StashSectionHeader.reuseIdentifier) as? StashSectionHeader else { return nil }
         let files = entries.filter { !$0.isDirectory }.count
         let folders = entries.count - files
-        header.label.text = section == 1 ? "OTHER LOCATIONS" : "\(folders) FOLDERS · \(files) FILES"
+        var parts: [String] = []
+        if folders > 0 { parts.append(folders == 1 ? "1 folder" : "\(folders) folders") }
+        if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
+        header.label.text = section == 1 ? "Other locations" : parts.joined(separator: " · ")
         return header
     }
 
@@ -212,29 +234,42 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: FileRowCell.reuseIdentifier, for: indexPath) as! FileRowCell
         let entry = entry(at: indexPath)
+        let incomplete = !entry.isDirectory && isIncomplete(entry.url)
         let detail: String
         if indexPath.section == 1 {
             detail = "Storage location"
         } else if entry.isDirectory {
-            detail = "Folder"
+            let count = itemCount(entry.url)
+            detail = count == 0 ? "Empty folder" : count == 1 ? "1 item" : "\(count) items"
         } else {
-            let size = ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file)
-            detail = isIncomplete(entry.url) ? "\(size) · Downloading" : "\(size) · \(DateFormatter.localizedString(from: entry.date, dateStyle: .medium, timeStyle: .none))"
+            var parts: [String] = []
+            let ext = entry.url.pathExtension.uppercased()
+            if !ext.isEmpty { parts.append(ext) }
+            parts.append(ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file))
+            parts.append(incomplete ? "Downloading…" : Self.dateFormatter.string(from: entry.date))
+            detail = parts.joined(separator: " · ")
         }
+        let rowKind: FileRowCell.Kind = indexPath.section == 1 ? .location : entry.isDirectory ? .folder : fileKind(for: entry.url)
         cell.configure(url: entry.url, title: locationNames[entry.url] ?? entry.name, detail: detail,
-                       symbolName: entry.isDirectory ? "folder.fill" : icon(for: entry.url),
-                       isDirectory: entry.isDirectory, loadsThumbnail: !isIncomplete(entry.url))
-        cell.accessoryType = entry.isDirectory ? .disclosureIndicator : .none
+                       kind: rowKind, loadsThumbnail: !incomplete)
         return cell
     }
 
-    private func icon(for url: URL) -> String {
+    private func fileKind(for url: URL) -> FileRowCell.Kind {
         let type = UTType(filenameExtension: url.pathExtension)
-        if type?.conforms(to: .audio) == true { return "music.note" }
-        if VLCPlayerViewModel.isMediaFile(url) { return "play.rectangle" }
-        if type?.conforms(to: .image) == true { return "photo" }
-        if type?.conforms(to: .archive) == true { return "doc.zipper" }
-        return "doc"
+        if type?.conforms(to: .audio) == true { return .audio }
+        if VLCPlayerViewModel.isMediaFile(url) { return .video }
+        if type?.conforms(to: .image) == true { return .image }
+        if type?.conforms(to: .archive) == true { return .archive }
+        return .document
+    }
+
+    private func itemCount(_ url: URL) -> Int {
+        if let count = folderCounts[url] { return count }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: url.path)) ?? []
+        let count = names.filter { !$0.hasPrefix(".") }.count
+        folderCounts[url] = count
+        return count
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -272,13 +307,18 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
         let isLocation = indexPath.section == 1
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
             guard let self else { return nil }
+            let isMedia = !entry.isDirectory && VLCPlayerViewModel.isMediaFile(entry.url)
+            let openTitle = entry.isDirectory ? "Open folder" : isMedia ? "Play" : "Open"
+            let openIcon: Icon = entry.isDirectory ? .folderOpen : isMedia ? .play : .expand
             var actions: [UIMenuElement] = [
-                UIAction(title: entry.isDirectory ? "Open folder" : "Open", image: UIImage(systemName: entry.isDirectory ? "folder" : "arrow.up.forward.app")) { [weak self] _ in self?.open(entry) },
-                UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up"), attributes: self.isIncomplete(entry.url) ? .disabled : []) { [weak self] _ in self?.share(entry) }
+                UIAction(title: openTitle, image: openIcon.image(22)) { [weak self] _ in self?.open(entry) },
+                UIAction(title: "Share", image: Icon.share.image(22), attributes: self.isIncomplete(entry.url) ? .disabled : []) { [weak self] _ in self?.share(entry) }
             ]
             if !isLocation {
-                actions.append(UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { [weak self] _ in self?.rename(entry) })
-                actions.append(UIAction(title: "Delete", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.delete(entry) })
+                actions.append(UIAction(title: "Rename", image: Icon.edit.image(22)) { [weak self] _ in self?.rename(entry) })
+                actions.append(UIMenu(options: .displayInline, children: [
+                    UIAction(title: "Delete", image: Icon.delete.image(22), attributes: .destructive) { [weak self] _ in self?.delete(entry) }
+                ]))
             }
             return UIMenu(children: actions)
         }
@@ -291,10 +331,23 @@ final class FileBrowserViewController: UITableViewController, UISearchResultsUpd
             self?.delete(entry)
             completion(true)
         }
-        action.image = UIImage(systemName: "trash")
+        action.image = Icon.delete.image(22)
         let configuration = UISwipeActionsConfiguration(actions: [action])
         configuration.performsFirstActionWithFullSwipe = false
         return configuration
+    }
+
+    override func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard indexPath.section == 0 else { return nil }
+        let entry = entry(at: indexPath)
+        guard !entry.isDirectory, !isIncomplete(entry.url) else { return nil }
+        let action = UIContextualAction(style: .normal, title: "Share") { [weak self] _, _, completion in
+            self?.share(entry)
+            completion(true)
+        }
+        action.image = Icon.share.image(22)
+        action.backgroundColor = SColor.mint
+        return UISwipeActionsConfiguration(actions: [action])
     }
 
     private func share(_ entry: Entry) {

@@ -94,27 +94,27 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
         searchVC.searchBar.cancelButtonClickedPublisher
             .map { "" }.assign(to: &viewModel.$searchQuery)
 
-        addButton.primaryAction = UIAction(title: %"common.add", image: .init(systemName: "plus")) { [unowned self] _ in
+        addButton.primaryAction = UIAction(title: %"common.add", image: Icon.add.image(22)) { [unowned self] _ in
             presentAddDownloadSheet()
         }
 
-        filesButton.primaryAction = UIAction(title: "Files", image: .init(systemName: "folder")) { [weak self] _ in
+        filesButton.primaryAction = UIAction(title: "Files", image: Icon.folder.image(22)) { [weak self] _ in
             self?.navigationController?.pushViewController(FileBrowserViewController(), animated: true)
         }
 
-        playButton.primaryAction = .init(title: %"details.start", image: .init(systemName: "play.fill"), handler: { [unowned self] _ in
+        playButton.primaryAction = .init(title: %"details.start", image: Icon.play.image(22), handler: { [unowned self] _ in
             viewModel.resumeAllSelected(at: collectionView.indexPathsForSelectedItems ?? [])
         })
 
-        pauseButton.primaryAction = .init(title: %"details.pause", image: .init(systemName: "pause.fill"), handler: { [unowned self] _ in
+        pauseButton.primaryAction = .init(title: %"details.pause", image: Icon.pause.image(22), handler: { [unowned self] _ in
             viewModel.pauseAllSelected(at: collectionView.indexPathsForSelectedItems ?? [])
         })
 
-        rehashButton.primaryAction = .init(title: %"details.rehash", image: .init(systemName: "arrow.clockwise"), handler: { [unowned self] _ in
+        rehashButton.primaryAction = .init(title: %"details.rehash", image: Icon.refresh.image(22), handler: { [unowned self] _ in
             viewModel.rehashAllSelected(at: collectionView.indexPathsForSelectedItems ?? [])
         })
 
-        deleteButton.primaryAction = .init(title: %"common.delete", image: .init(systemName: "trash"), handler: { [unowned self] _ in
+        deleteButton.primaryAction = .init(title: %"common.delete", image: Icon.delete.image(22), handler: { [unowned self] _ in
             viewModel.deleteAllSelected(at: collectionView.indexPathsForSelectedItems ?? [])
         })
 
@@ -138,15 +138,15 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
             return UIContextMenuConfiguration {
                 items.count == 1 ? items.first?.previewController() : nil
             } actionProvider: { _ in
-                let start = UIAction(title: %"details.start", image: .init(systemName: "play.fill"),
+                let start = UIAction(title: %"details.start", image: Icon.play.image(22),
                                      attributes: items.contains(where: \.canResume) ? [] : .hidden) { _ in
                     items.filter(\.canResume).forEach { $0.resume() }
                 }
-                let pause = UIAction(title: %"details.pause", image: .init(systemName: "pause.fill"),
+                let pause = UIAction(title: %"details.pause", image: Icon.pause.image(22),
                                      attributes: items.contains(where: \.canPause) ? [] : .hidden) { _ in
                     items.filter(\.canPause).forEach { $0.pause() }
                 }
-                let delete = UIAction(title: %"common.delete", image: .init(systemName: "trash"), attributes: .destructive) { [unowned self] _ in
+                let delete = UIAction(title: %"common.delete", image: Icon.delete.image(22), attributes: .destructive) { [unowned self] _ in
                     viewModel.deleteAllSelected(at: indexPaths)
                 }
                 return UIMenu(title: items.count == 1 ? items[0].title : "Downloads", children: [start, pause, delete])
@@ -173,6 +173,8 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        // A large "Downloads" title, like Apple's own apps. Every screen pushed from here opts out (.never).
+        navigationController?.navigationBar.prefersLargeTitles = true
         smoothlyDeselectRows(in: collectionView)
     }
 
@@ -209,7 +211,7 @@ class TorrentListViewController<VM: TorrentListViewModel>: BaseViewController<VM
 private extension TorrentListViewController {
     func setup() {
         title = viewModel.title
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         setupCollectionView()
         setupSearch()
     }
@@ -304,17 +306,20 @@ private extension TorrentListViewController {
                     switch emptyType {
                     case .noData:
                         var config = UIContentUnavailableConfiguration.empty()
-                        config.image = .init(systemName: "square.stack.3d.down.forward")
+                        config.image = Icon.inbox.image(52)
                         config.imageProperties.tintColor = SColor.mint
-                        config.text = "Your stash is empty"
+                        config.text = "No downloads yet"
                         config.textProperties.font = SFont.display(24, .heavy) ?? .systemFont(ofSize: 24, weight: .heavy)
-                        config.secondaryText = "Share a page or link to Drift from any app, or tap + to paste one."
+                        config.secondaryText = "Play a video in the browser and tap the green button, or tap + to paste a link."
+                        config.secondaryTextProperties.font = SFont.ui(15) ?? .systemFont(ofSize: 15)
+                        config.secondaryTextProperties.color = SColor.text3
                         contentUnavailableConfiguration = config
                     case .badSearch:
                         contentUnavailableConfiguration = UIContentUnavailableConfiguration.search()
                     case .badFilter(let filter):
                         var configuration = UIContentUnavailableConfiguration.empty()
-                        configuration.image = .init(systemName: "line.3.horizontal.decrease")
+                        configuration.image = Icon.filter.image(44)
+                        configuration.imageProperties.tintColor = SColor.text3
                         configuration.text = %"list.empty.filter.title-\(filter.name)"
                         configuration.secondaryText = "Downloads in this state will appear here."
                         contentUnavailableConfiguration = configuration

@@ -19,6 +19,45 @@ class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectable
         if file?.state == .failed, file?.page == file?.url { return "safari" }
         return "doc"
     }
+    private var fileExtension: String { (file?.name as NSString?)?.pathExtension.lowercased() ?? "" }
+    private static let audioExtensions: Set<String> = ["mp3", "m4a", "aac", "flac", "wav", "ogg", "opus"]
+    private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "gif", "webp", "heic"]
+    private static let archiveExtensions: Set<String> = ["zip", "rar", "7z", "gz", "tar", "xz"]
+
+    var isVideoFile: Bool { isFile && ThumbnailProvider.videoExtensions.contains(fileExtension) }
+
+    /// The Hugeicon for the download's kind (shown until a thumbnail is available).
+    var kindHugeIcon: Icon {
+        guard isFile else { return .magnet }
+        let ext = fileExtension
+        if ThumbnailProvider.videoExtensions.contains(ext) { return .film }
+        if Self.audioExtensions.contains(ext) { return .music }
+        if Self.imageExtensions.contains(ext) { return .image }
+        if Self.archiveExtensions.contains(ext) { return .fileZip }
+        if file?.state == .failed, file?.page == file?.url { return .globe }
+        return .file
+    }
+
+    /// The tint of the kind tile.
+    var kindTint: Color {
+        guard isFile else { return Brand.teal }
+        let ext = fileExtension
+        if ThumbnailProvider.videoExtensions.contains(ext) { return Brand.violet }
+        if Self.audioExtensions.contains(ext) { return Brand.ember }
+        if Self.imageExtensions.contains(ext) { return Brand.teal }
+        if Self.archiveExtensions.contains(ext) { return Color.sAmber }
+        if file?.state == .failed { return Color.sCoral }
+        return Color.sText2
+    }
+
+    /// The saved file, for a thumbnail: completed videos and images only.
+    var thumbnailURL: URL? {
+        guard let fileID, let file, file.state == .completed else { return nil }
+        let ext = fileExtension
+        guard ThumbnailProvider.videoExtensions.contains(ext) || Self.imageExtensions.contains(ext) else { return nil }
+        return FileDownloadService.shared.fileURL(fileID)
+    }
+
     var file: FileDownload? { FileDownloadService.shared.downloads.first { $0.id == fileID } }
     var listState: TorrentHandle.State {
         if isFile { return file?.listState ?? .finished }
@@ -42,6 +81,10 @@ class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectable
     @Published var stateColor = Color.sText
     @Published var metaText = ""
     @Published var detailText = ""
+    /// A small icon in the status pill (done, failed, paused).
+    @Published var stateIcon: Icon?
+    /// The progress bar shows while a download is unfinished.
+    @Published var showsProgress = true
 
     convenience init(fileID: UUID) {
         self.init()
@@ -106,11 +149,23 @@ class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectable
             connections = FileDownloadService.shared.connections(fileID).map(\.progress)
             stateLabel = file.stateTitle
             switch file.state {
-            case .completed: stateColor = .sMint
-            case .failed: stateColor = .sCoral
-            case .paused, .queued: stateColor = .sAmber
-            default: stateColor = .sText
+            case .completed:
+                stateColor = .sMint
+                stateIcon = .checkCircle
+            case .failed:
+                stateColor = .sCoral
+                stateIcon = .alert
+            case .paused:
+                stateColor = .sAmber
+                stateIcon = .pause
+            case .queued, .preparing:
+                stateColor = .sText2
+                stateIcon = nil
+            case .downloading, .assembling:
+                stateColor = .sMint
+                stateIcon = nil
             }
+            showsProgress = file.state != .completed && file.state != .failed
             let host = file.page?.host ?? file.url.host ?? ""
             if file.state == .downloading {
                 metaText = "\(Int(progress * 100))% · \(file.speed.bitrateToHumanReadable)/s · \(file.timeRemaining)"
@@ -129,11 +184,23 @@ class TorrentListItemViewModel: BaseViewModelWith<TorrentHandle>, MvvmSelectable
             statusText = queued ? "Queued" : snapshot.stateText
             stateLabel = queued ? "Queued" : snapshot.friendlyState.name
             switch snapshot.friendlyState {
-            case .finished, .seeding: stateColor = .sMint
-            case .storageError: stateColor = .sCoral
-            case .paused: stateColor = .sAmber
-            default: stateColor = queued ? .sAmber : .sText
+            case .finished:
+                stateColor = .sMint
+                stateIcon = .checkCircle
+            case .seeding:
+                stateColor = Brand.teal
+                stateIcon = .upload
+            case .storageError:
+                stateColor = .sCoral
+                stateIcon = .alert
+            case .paused:
+                stateColor = .sAmber
+                stateIcon = .pause
+            default:
+                stateColor = queued ? .sText2 : .sMint
+                stateIcon = nil
             }
+            showsProgress = !snapshot.isFinished && snapshot.friendlyState != .storageError
             let speed = snapshot.downloadRate > 0 ? " · ↓ \(snapshot.downloadRate.bitrateToHumanReadable)/s" : ""
             metaText = "\(Int(progress * 100))% · \(snapshot.totalWantedDone.bitrateToHumanReadable) / \(snapshot.totalWanted.bitrateToHumanReadable)\(speed)"
             detailText = ""

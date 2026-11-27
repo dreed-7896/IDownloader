@@ -25,9 +25,15 @@ final class BrowserViewController: UIViewController {
     private var startPage: UIHostingController<StartPageView>?
     private let suggestionsView = UITableView(frame: .zero, style: .plain)
     private var suggestions: [BrowserHistoryEntry] = []
+    /// What's typed in the address bar; shown as the first "Search …" row.
+    private var suggestionQuery = ""
     private weak var shownWebView: WKWebView?
     private var shownTabID: UUID?
     private var scrollObservation: NSKeyValueObservation?
+    private var themeObservations: [NSKeyValueObservation] = []
+    /// Fills the status bar area with the page's theme color, like Safari.
+    private let statusBackdrop = UIView()
+    private var statusBarStyle: UIStatusBarStyle = .default
     private var lastScrollOffset: CGFloat = 0
 
     // Dock
@@ -44,6 +50,7 @@ final class BrowserViewController: UIViewController {
     private let menuButton = UIButton(type: .system)
     private let downloadsButton = UIButton(type: .system)
     private let downloadsBadge = UILabel()
+    private let downloadsRing = CAShapeLayer()
     private let tabsButton = UIButton(type: .system)
     private var isDockCollapsed = false
 
@@ -84,12 +91,55 @@ final class BrowserViewController: UIViewController {
         AppRootController.current?.$activeDownloads.receive(on: DispatchQueue.main)
             .sink { [weak self] count in self?.updateDownloadsBadge(count) }
             .store(in: &subscriptions)
+        AppRootController.current?.$downloadProgress.receive(on: DispatchQueue.main)
+            .sink { [weak self] progress in self?.updateDownloadsRing(progress) }
+            .store(in: &subscriptions)
 
         AdBlocker.refreshListIfNeeded()
         refreshAdBlock(reload: false)
     }
 
-    override var preferredStatusBarStyle: UIStatusBarStyle { .default }
+    override var preferredStatusBarStyle: UIStatusBarStyle { statusBarStyle }
+
+    /// Colors the area under the status bar from the page (theme-color meta tag, else its background).
+    private func updateStatusBackdrop() {
+        var color: UIColor = SColor.bg
+        if let tab = session.selected, !tab.isHome, tab.isWebViewLoaded, tab.webView === shownWebView {
+            color = tab.webView.themeColor ?? tab.webView.underPageBackgroundColor ?? SColor.bg
+        }
+        let resolved = color.resolvedColor(with: traitCollection)
+        UIView.animate(withDuration: 0.2) { self.statusBackdrop.backgroundColor = resolved }
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        resolved.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        let light = 0.2126 * red + 0.7152 * green + 0.0722 * blue > 0.6
+        let style: UIStatusBarStyle = light ? .darkContent : .lightContent
+        if style != statusBarStyle {
+            statusBarStyle = style
+            setNeedsStatusBarAppearanceUpdate()
+        }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let bounds = downloadsButton.bounds
+        guard bounds.width > 0 else { return }
+        downloadsRing.frame = bounds
+        downloadsRing.path = UIBezierPath(arcCenter: CGPoint(x: bounds.midX, y: bounds.midY), radius: 10,
+                                          startAngle: -.pi / 2, endAngle: .pi * 1.5, clockwise: true).cgPath
+    }
+
+    private func updateDownloadsRing(_ progress: Double?) {
+        guard let progress else {
+            downloadsRing.isHidden = true
+            return
+        }
+        downloadsRing.strokeColor = SColor.mint.resolvedColor(with: traitCollection).cgColor
+        downloadsRing.isHidden = false
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.6)
+        downloadsRing.strokeEnd = CGFloat(max(0.03, progress))
+        CATransaction.commit()
+    }
 
     // MARK: - Layout
 
@@ -214,6 +264,15 @@ final class BrowserViewController: UIViewController {
         downloadsBadge.translatesAutoresizingMaskIntoConstraints = false
         downloadsButton.addSubview(downloadsBadge)
 
+        // Progress of running downloads, drawn over the icon's circle.
+        downloadsRing.fillColor = UIColor.clear.cgColor
+        downloadsRing.strokeColor = SColor.mint.cgColor
+        downloadsRing.lineWidth = 2.4
+        downloadsRing.lineCap = .round
+        downloadsRing.strokeEnd = 0
+        downloadsRing.isHidden = true
+        downloadsButton.layer.addSublayer(downloadsRing)
+
         for button in [backButton, forwardButton, menuButton, downloadsButton, tabsButton] { buttonRow.addArrangedSubview(button) }
         buttonRow.distribution = .fillEqually
         buttonRow.heightAnchor.constraint(equalToConstant: 50).isActive = true
@@ -262,7 +321,14 @@ final class BrowserViewController: UIViewController {
         contentView.backgroundColor = SColor.bg
         contentView.translatesAutoresizingMaskIntoConstraints = false
         view.insertSubview(contentView, at: 0)
+        statusBackdrop.backgroundColor = SColor.bg
+        statusBackdrop.translatesAutoresizingMaskIntoConstraints = false
+        view.insertSubview(statusBackdrop, aboveSubview: contentView)
         NSLayoutConstraint.activate([
+            statusBackdrop.topAnchor.constraint(equalTo: view.topAnchor),
+            statusBackdrop.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            statusBackdrop.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            statusBackdrop.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             contentView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -315,7 +381,9 @@ final class BrowserViewController: UIViewController {
 
     private func buildSuggestions() {
         suggestionsView.backgroundColor = SColor.bg
-        suggestionsView.separatorColor = SColor.line
+        suggestionsView.separatorColor = UIColor.white.withAlphaComponent(0.06)
+        suggestionsView.separatorInset = UIEdgeInsets(top: 0, left: 60, bottom: 0, right: 0)
+        suggestionsView.sectionHeaderTopPadding = 0
         suggestionsView.keyboardDismissMode = .onDrag
         suggestionsView.dataSource = self
         suggestionsView.delegate = self
@@ -465,6 +533,7 @@ final class BrowserViewController: UIViewController {
         shownTabID = tab.id
         tabSubscriptions.removeAll()
         scrollObservation = nil
+        themeObservations = []
         shownWebView?.removeFromSuperview()
         shownWebView = nil
         setDockCollapsed(false, animated: false)
@@ -490,6 +559,7 @@ final class BrowserViewController: UIViewController {
 
     /// The start page shows for a fresh tab and when Home is pressed.
     private func updateStartPage() {
+        defer { updateStatusBackdrop() }
         guard let tab = session.selected else { return }
         let showHome = tab.isHome || (!tab.isWebViewLoaded && tab.pendingURL == nil)
         if showHome {
@@ -541,6 +611,7 @@ final class BrowserViewController: UIViewController {
         }
         if webView.scrollView.refreshControl == nil {
             let refresh = UIRefreshControl()
+            refresh.tintColor = SColor.text3
             refresh.addAction(UIAction { [weak webView, weak refresh] _ in
                 webView?.reload()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { refresh?.endRefreshing() }
@@ -549,6 +620,14 @@ final class BrowserViewController: UIViewController {
         }
         shownWebView = webView
         lastScrollOffset = webView.scrollView.contentOffset.y
+        themeObservations = [
+            webView.observe(\.themeColor, options: [.new]) { [weak self] _, _ in
+                DispatchQueue.main.async { self?.updateStatusBackdrop() }
+            },
+            webView.observe(\.underPageBackgroundColor, options: [.new]) { [weak self] _, _ in
+                DispatchQueue.main.async { self?.updateStatusBackdrop() }
+            }
+        ]
         scrollObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
             self?.scrolled(scrollView)
         }
@@ -620,16 +699,49 @@ final class BrowserViewController: UIViewController {
             UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.55, initialSpringVelocity: 0.8) {
                 self.videoButton.transform = .identity
             }
+            pulseVideoButton()
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        }
+    }
+
+    /// Two soft rings expanding from the save button when a video is first found.
+    private func pulseVideoButton() {
+        let side: CGFloat = 58
+        for index in 0..<2 {
+            let ring = CAShapeLayer()
+            ring.path = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side)).cgPath
+            ring.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+            ring.position = CGPoint(x: side / 2, y: side / 2)
+            ring.fillColor = UIColor.clear.cgColor
+            ring.strokeColor = SColor.mint.resolvedColor(with: traitCollection).cgColor
+            ring.lineWidth = 2
+            ring.opacity = 0
+            videoButton.layer.insertSublayer(ring, at: 0)
+            let scale = CABasicAnimation(keyPath: "transform.scale")
+            scale.fromValue = 1
+            scale.toValue = 1.7
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0.7
+            fade.toValue = 0
+            let group = CAAnimationGroup()
+            group.animations = [scale, fade]
+            group.duration = 1.1
+            group.beginTime = CACurrentMediaTime() + Double(index) * 0.35
+            group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            group.fillMode = .backwards
+            ring.add(group, forKey: "pulse")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2 + Double(index) * 0.35) { ring.removeFromSuperlayer() }
         }
     }
 
     // MARK: - Actions
 
     @objc private func addressChanged() {
-        suggestions = BrowserStore.shared.suggestions(for: addressField.text ?? "")
+        suggestionQuery = (addressField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        suggestions = BrowserStore.shared.suggestions(for: suggestionQuery)
         suggestionsView.reloadData()
-        suggestionsView.isHidden = suggestions.isEmpty
-        if !suggestions.isEmpty { view.bringSubviewToFront(suggestionsView) }
+        suggestionsView.isHidden = suggestionQuery.isEmpty
+        if !suggestionQuery.isEmpty { view.bringSubviewToFront(suggestionsView) }
     }
 
     @objc private func cancelEditing() {
@@ -686,11 +798,13 @@ final class BrowserViewController: UIViewController {
     }
 
     @objc private func showDownloads() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         addressField.resignFirstResponder()
         AppRootController.current?.showDownloads()
     }
 
     @objc private func showTabs() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         addressField.resignFirstResponder()
         let present = { [weak self] in
             guard let self else { return }
@@ -724,6 +838,7 @@ final class BrowserViewController: UIViewController {
     // MARK: - Menu
 
     @objc private func showMenu() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         addressField.resignFirstResponder()
         guard let tab = session.selected else { return }
         let page = tab.isHome ? nil : tab.url.flatMap { ["http", "https"].contains($0.scheme?.lowercased() ?? "") ? $0 : nil }
@@ -1100,32 +1215,56 @@ extension BrowserViewController: UITextFieldDelegate {
 }
 
 extension BrowserViewController: UITableViewDataSource, UITableViewDelegate {
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { suggestions.count }
+    // Section 0: "Search …" / "Go to …" for what's typed. Section 1: matching bookmarks and history.
+    func numberOfSections(in tableView: UITableView) -> Int { 2 }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        section == 0 ? (suggestionQuery.isEmpty ? 0 : 1) : suggestions.count
+    }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        let entry = suggestions[indexPath.row]
         var content = UIListContentConfiguration.subtitleCell()
-        content.text = entry.title
-        content.secondaryText = entry.url.absoluteString
         content.textProperties.font = SFont.ui(15, .semibold) ?? .systemFont(ofSize: 15, weight: .semibold)
         content.textProperties.color = SColor.text
-        content.secondaryTextProperties.font = SFont.mono(12, .medium) ?? .monospacedSystemFont(ofSize: 12, weight: .medium)
+        content.textProperties.numberOfLines = 1
+        content.secondaryTextProperties.font = SFont.ui(13) ?? .systemFont(ofSize: 13)
         content.secondaryTextProperties.color = SColor.text3
-        content.image = SiteIconCache.shared.cached(for: entry.url) ?? (entry.date == .distantPast ? Icon.bookmark : Icon.history).image(22)
-        content.imageProperties.maximumSize = CGSize(width: 28, height: 28)
-        content.imageProperties.reservedLayoutSize = CGSize(width: 28, height: 28)
-        content.imageProperties.tintColor = SColor.text3
+        content.secondaryTextProperties.numberOfLines = 1
+        content.imageProperties.maximumSize = CGSize(width: 30, height: 30)
+        content.imageProperties.reservedLayoutSize = CGSize(width: 30, height: 30)
+        content.imageProperties.cornerRadius = 8
+        content.imageToTextPadding = 14
+        content.directionalLayoutMargins = .init(top: 10, leading: 16, bottom: 10, trailing: 16)
+        if indexPath.section == 0 {
+            let target = BrowserStore.shared.url(for: suggestionQuery)
+            let isSearch = target?.host == BrowserStore.shared.searchEngine.url(for: "x")?.host
+            content.text = suggestionQuery
+            content.secondaryText = isSearch ? "Search \(BrowserStore.shared.searchEngine.title)" : "Go to \(target?.host ?? suggestionQuery)"
+            content.image = (isSearch ? Icon.search : Icon.globe).image(22)
+            content.imageProperties.tintColor = SColor.mint
+        } else {
+            let entry = suggestions[indexPath.row]
+            content.text = entry.title
+            var host = entry.url.host ?? entry.url.absoluteString
+            if host.hasPrefix("www.") { host.removeFirst(4) }
+            content.secondaryText = host
+            content.image = SiteIconCache.shared.cached(for: entry.url) ?? (entry.date == .distantPast ? Icon.bookmark : Icon.history).image(22)
+            content.imageProperties.tintColor = SColor.text3
+        }
         cell.contentConfiguration = content
-        cell.backgroundColor = SColor.bg
+        cell.backgroundColor = .clear
+        let selected = UIView()
+        selected.backgroundColor = SColor.s2
+        cell.selectedBackgroundView = selected
         return cell
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let url = suggestions[indexPath.row].url
+        let target = indexPath.section == 0 ? BrowserStore.shared.url(for: suggestionQuery) : suggestions[indexPath.row].url
         addressField.resignFirstResponder()
-        open(url)
+        if let target { open(target) }
     }
 }
 

@@ -36,6 +36,8 @@ final class AppRootController: UIViewController {
     let downloads: DownloadsNavigationController
     /// Running downloads, shown as a badge on the browser's Downloads button.
     @Published private(set) var activeDownloads = 0
+    /// Combined progress of running downloads (0...1), or nil when nothing with a known size is running.
+    @Published private(set) var downloadProgress: Double?
     private var subscriptions = Set<AnyCancellable>()
 
     init(downloadsRoot: UIViewController) {
@@ -73,9 +75,20 @@ final class AppRootController: UIViewController {
             .prepend(())
             .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] in
-                let files = FileDownloadService.shared.downloads.filter { $0.isActive || $0.state == .queued }.count
-                let torrents = TorrentService.shared.torrents.values.filter { $0.snapshot.friendlyState == .downloading }.count
-                self?.activeDownloads = files + torrents
+                let files = FileDownloadService.shared.downloads.filter { $0.isActive || $0.state == .queued }
+                let torrents = TorrentService.shared.torrents.values.filter { $0.snapshot.friendlyState == .downloading }
+                self?.activeDownloads = files.count + torrents.count
+                var done: Double = 0
+                var total: Double = 0
+                for file in files where file.totalBytes > 0 {
+                    done += Double(file.receivedBytes)
+                    total += Double(file.totalBytes)
+                }
+                for handle in torrents {
+                    done += Double(handle.snapshot.totalWantedDone)
+                    total += Double(handle.snapshot.totalWanted)
+                }
+                self?.downloadProgress = total > 0 ? min(1, done / total) : nil
             }
             .store(in: &subscriptions)
     }

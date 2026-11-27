@@ -12,7 +12,8 @@ enum StashBarItem {
     static func make(title: String?, systemImage: String, prominent: Bool = false, accessibilityLabel: String? = nil,
                      action: @escaping () -> Void) -> UIBarButtonItem {
         var configuration = prominent ? UIButton.Configuration.filled() : UIButton.Configuration.plain()
-        let hugeicon: [String: Icon] = ["folder": .folder, "gearshape": .settings, "plus": .add, "square.and.arrow.down": .saveVideo]
+        let hugeicon: [String: Icon] = ["folder": .folder, "gearshape": .settings, "plus": .add, "square.and.arrow.down": .upload,
+                                       "folder.badge.plus": .folderAdd]
         configuration.image = hugeicon[systemImage]?.image(21)
             ?? UIImage(systemName: systemImage, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold))
         configuration.imagePadding = 7

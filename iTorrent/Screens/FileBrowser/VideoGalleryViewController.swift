@@ -19,12 +19,12 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
     private var subscriptions = Set<AnyCancellable>()
     private var scanGeneration = UUID()
     private let selectButton = UIBarButtonItem(title: "Select")
-    private let deleteAllButton = UIBarButtonItem(title: "Delete all", image: UIImage(systemName: "trash"))
-    private let optionsButton = UIBarButtonItem(title: "Options", image: UIImage(systemName: "ellipsis.circle"))
+    private let deleteAllButton = UIBarButtonItem(title: "Delete all", image: Icon.delete.image(22))
+    private let optionsButton = UIBarButtonItem(title: "Options", image: Icon.more.image(22))
     private let selectAllButton = UIBarButtonItem(title: "Select all")
     private let selectionCount = UIBarButtonItem(title: "Select videos")
-    private let shareButton = UIBarButtonItem(title: "Share", image: UIImage(systemName: "square.and.arrow.up"))
-    private let deleteButton = UIBarButtonItem(title: "Delete", image: UIImage(systemName: "trash"))
+    private let shareButton = UIBarButtonItem(title: "Share", image: Icon.share.image(22))
+    private let deleteButton = UIBarButtonItem(title: "Delete", image: Icon.delete.image(22))
     private var selectedURLs = Set<URL>()
     private var isSelecting = false
     private var isSharing = false
@@ -32,13 +32,16 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
     var isToolbarItemsHidden: Bool { !isSelecting }
 
     init() {
+        // 16pt page margins and 12pt gutters; each card is a 16:9 thumbnail plus two lines of text.
         let layout = UICollectionViewCompositionalLayout { _, environment in
-            let count = environment.container.effectiveContentSize.width > 600 ? 3 : 2
+            let width = environment.container.effectiveContentSize.width
+            let count = width > 600 ? 3 : 2
             let item = NSCollectionLayoutItem(layoutSize: .init(widthDimension: .fractionalWidth(1 / CGFloat(count)), heightDimension: .fractionalHeight(1)))
-            item.contentInsets = .init(top: 5, leading: 5, bottom: 5, trailing: 5)
-            let group = NSCollectionLayoutGroup.horizontal(layoutSize: .init(widthDimension: .fractionalWidth(1), heightDimension: .absolute(environment.container.effectiveContentSize.width / CGFloat(count) * 0.5625 + 72)), subitem: item, count: count)
+            item.contentInsets = .init(top: 6, leading: 6, bottom: 6, trailing: 6)
+            let cardWidth = (width - 20) / CGFloat(count) - 12
+            let group = NSCollectionLayoutGroup.horizontal(layoutSize: .init(widthDimension: .fractionalWidth(1), heightDimension: .absolute(cardWidth * 9 / 16 + 12 + 66)), subitem: item, count: count)
             let section = NSCollectionLayoutSection(group: group)
-            section.contentInsets = .init(top: 8, leading: 10, bottom: 16, trailing: 10)
+            section.contentInsets = .init(top: 8, leading: 10, bottom: 24, trailing: 10)
             return section
         }
         super.init(collectionViewLayout: layout)
@@ -63,15 +66,15 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
         selectButton.primaryAction = UIAction(title: "Select") { [weak self] _ in self?.toggleSelection() }
         deleteAllButton.tintColor = .systemRed
         deleteAllButton.accessibilityLabel = "Delete all videos"
-        deleteAllButton.primaryAction = UIAction(title: "Delete all", image: UIImage(systemName: "trash")) { [weak self] _ in
+        deleteAllButton.primaryAction = UIAction(title: "Delete all", image: Icon.delete.image(22)) { [weak self] _ in
             guard let self else { return }
             self.confirmDelete(self.videos, all: true)
         }
         selectAllButton.primaryAction = UIAction(title: "Select all") { [weak self] _ in self?.toggleSelectAll() }
         selectionCount.isEnabled = false
-        shareButton.primaryAction = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in self?.shareSelected() }
+        shareButton.primaryAction = UIAction(title: "Share", image: Icon.share.image(22)) { [weak self] _ in self?.shareSelected() }
         deleteButton.tintColor = .systemRed
-        deleteButton.primaryAction = UIAction(title: "Delete", image: UIImage(systemName: "trash")) { [weak self] _ in
+        deleteButton.primaryAction = UIAction(title: "Delete", image: Icon.delete.image(22)) { [weak self] _ in
             guard let self else { return }
             self.confirmDelete(self.selectedVideos, all: false)
         }
@@ -166,8 +169,8 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
         collectionView.reloadData()
         if filtered.isEmpty {
             collectionView.backgroundView = query.isEmpty
-                ? StashEmptyView(kicker: "Videos", title: "No videos yet", message: "Finished videos from every download folder show up here.")
-                : StashEmptyView(kicker: "Search", title: "No matches", message: "No videos match “\(query)”.")
+                ? StashEmptyView(icon: .film, title: "No videos yet", message: "Finished videos from every download folder appear here.")
+                : StashEmptyView(icon: .search, title: "No matches", message: "No videos match “\(query)”.")
         } else { collectionView.backgroundView = nil }
     }
 
@@ -217,8 +220,8 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
         shareButton.isEnabled = !selectedURLs.isEmpty
         deleteButton.isEnabled = !selectedURLs.isEmpty
         optionsButton.menu = UIMenu(children: [
-            UIAction(title: "Play all", image: UIImage(systemName: "play.fill"), attributes: filtered.isEmpty || isSelecting ? .disabled : []) { [weak self] _ in self?.play(at: 0) },
-            UIMenu(title: "Sort", image: UIImage(systemName: "arrow.up.arrow.down"), children: [
+            UIAction(title: "Play all", image: Icon.play.image(22), attributes: filtered.isEmpty || isSelecting ? .disabled : []) { [weak self] _ in self?.play(at: 0) },
+            UIMenu(title: "Sort", image: Icon.sort.image(22), children: [
                 UIAction(title: "Name", state: newestFirst ? .off : .on) { [weak self] _ in self?.newestFirst = false; self?.applyFilter() },
                 UIAction(title: "Newest first", state: newestFirst ? .on : .off) { [weak self] _ in self?.newestFirst = true; self?.applyFilter() }
             ])
@@ -313,50 +316,97 @@ final class VideoGalleryViewController: UICollectionViewController, UISearchResu
     }
 }
 
+/// Darkens the bottom of a thumbnail so the duration pill reads on any frame.
+private final class GalleryShadeView: UIView {
+    override class var layerClass: AnyClass { CAGradientLayer.self }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        if let gradient = layer as? CAGradientLayer {
+            gradient.colors = [UIColor.black.withAlphaComponent(0).cgColor, UIColor.black.withAlphaComponent(0.5).cgColor]
+            gradient.locations = [0, 1]
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
+/// A label with padding: the duration pill.
+private final class GalleryPillLabel: UILabel {
+    var insets = UIEdgeInsets(top: 2, left: 7, bottom: 2, right: 7)
+
+    override func drawText(in rect: CGRect) {
+        super.drawText(in: rect.inset(by: insets))
+    }
+
+    override var intrinsicContentSize: CGSize {
+        let size = super.intrinsicContentSize
+        return CGSize(width: size.width + insets.left + insets.right, height: size.height + insets.top + insets.bottom)
+    }
+}
+
 private final class VideoGalleryCell: UICollectionViewCell {
     private let thumbnail = UIImageView()
-    private let placeholder = UIImageView(image: UIImage(systemName: "play.rectangle"))
-    private let duration = UILabel()
+    private let placeholder = UIImageView(image: Icon.film.image(28))
+    private let shade = GalleryShadeView()
+    private let duration = GalleryPillLabel()
     private let name = UILabel()
     private let detail = UILabel()
-    private let selectionBadge = UIImageView()
+    private let selectionBadge = UIView()
+    private let selectionCheck = UIImageView(image: Icon.tick.image(16))
     private var representedURL: URL?
     private var loadTask: Task<Void, Never>?
+    private var durationTask: Task<Void, Never>?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         thumbnail.backgroundColor = SColor.s2
         thumbnail.contentMode = .scaleAspectFill
         thumbnail.clipsToBounds = true
-        thumbnail.layer.borderWidth = 1
-        thumbnail.layer.borderColor = SColor.line.cgColor
+        thumbnail.layer.cornerRadius = 12
+        thumbnail.layer.cornerCurve = .continuous
+        thumbnail.layer.borderColor = SColor.mint.cgColor
         placeholder.tintColor = SColor.text3
         placeholder.contentMode = .center
-        placeholder.preferredSymbolConfiguration = .init(pointSize: 22, weight: .regular)
         placeholder.translatesAutoresizingMaskIntoConstraints = false
         thumbnail.addSubview(placeholder)
-        duration.font = SFont.mono(11, .bold) ?? .monospacedSystemFont(ofSize: 11, weight: .bold)
+        shade.isHidden = true
+        shade.translatesAutoresizingMaskIntoConstraints = false
+        thumbnail.addSubview(shade)
+        duration.font = SFont.ui(11, .semibold) ?? .systemFont(ofSize: 11, weight: .semibold)
         duration.textColor = .white
-        duration.backgroundColor = UIColor.black.withAlphaComponent(0.7)
+        duration.backgroundColor = UIColor.black.withAlphaComponent(0.6)
         duration.textAlignment = .center
+        duration.layer.cornerRadius = 6
+        duration.layer.cornerCurve = .continuous
+        duration.layer.masksToBounds = true
         duration.isHidden = true
         duration.translatesAutoresizingMaskIntoConstraints = false
         thumbnail.addSubview(duration)
-        name.font = SFont.ui(15, .semibold) ?? .systemFont(ofSize: 15, weight: .semibold)
+
+        name.font = SFont.ui(14, .semibold) ?? .systemFont(ofSize: 14, weight: .semibold)
         name.textColor = SColor.text
         name.numberOfLines = 2
-        detail.font = SFont.mono(12, .medium) ?? .monospacedSystemFont(ofSize: 12, weight: .medium)
+        detail.font = SFont.ui(12) ?? .systemFont(ofSize: 12)
         detail.textColor = SColor.text3
         let stack = UIStackView(arrangedSubviews: [thumbnail, name, detail])
         stack.axis = .vertical
-        stack.spacing = 6
+        stack.spacing = 3
         stack.setCustomSpacing(8, after: thumbnail)
         stack.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(stack)
-        selectionBadge.translatesAutoresizingMaskIntoConstraints = false
-        selectionBadge.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 20, weight: .bold)
+
+        selectionBadge.layer.cornerRadius = 13
+        selectionBadge.layer.borderColor = UIColor.white.cgColor
         selectionBadge.isHidden = true
+        selectionBadge.translatesAutoresizingMaskIntoConstraints = false
+        selectionCheck.contentMode = .center
+        selectionCheck.translatesAutoresizingMaskIntoConstraints = false
+        selectionBadge.addSubview(selectionCheck)
         contentView.addSubview(selectionBadge)
+
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
@@ -365,14 +415,19 @@ private final class VideoGalleryCell: UICollectionViewCell {
             thumbnail.heightAnchor.constraint(equalTo: thumbnail.widthAnchor, multiplier: 9 / 16),
             placeholder.centerXAnchor.constraint(equalTo: thumbnail.centerXAnchor),
             placeholder.centerYAnchor.constraint(equalTo: thumbnail.centerYAnchor),
-            duration.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: -6),
-            duration.bottomAnchor.constraint(equalTo: thumbnail.bottomAnchor, constant: -6),
-            duration.heightAnchor.constraint(equalToConstant: 18),
-            duration.widthAnchor.constraint(greaterThanOrEqualToConstant: 36),
-            selectionBadge.topAnchor.constraint(equalTo: thumbnail.topAnchor, constant: 6),
-            selectionBadge.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: -6),
+            shade.leadingAnchor.constraint(equalTo: thumbnail.leadingAnchor),
+            shade.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor),
+            shade.bottomAnchor.constraint(equalTo: thumbnail.bottomAnchor),
+            shade.heightAnchor.constraint(equalTo: thumbnail.heightAnchor, multiplier: 0.45),
+            duration.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: -7),
+            duration.bottomAnchor.constraint(equalTo: thumbnail.bottomAnchor, constant: -7),
+            duration.heightAnchor.constraint(equalToConstant: 20),
+            selectionBadge.topAnchor.constraint(equalTo: thumbnail.topAnchor, constant: 8),
+            selectionBadge.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: -8),
             selectionBadge.widthAnchor.constraint(equalToConstant: 26),
-            selectionBadge.heightAnchor.constraint(equalToConstant: 26)
+            selectionBadge.heightAnchor.constraint(equalToConstant: 26),
+            selectionCheck.centerXAnchor.constraint(equalTo: selectionBadge.centerXAnchor),
+            selectionCheck.centerYAnchor.constraint(equalTo: selectionBadge.centerYAnchor)
         ])
         thumbnail.setContentHuggingPriority(.defaultLow, for: .vertical)
         name.setContentCompressionResistancePriority(.required, for: .vertical)
@@ -381,31 +436,52 @@ private final class VideoGalleryCell: UICollectionViewCell {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    /// A light press: the card sinks a little, like Photos.
+    override var isHighlighted: Bool {
+        didSet {
+            let pressed = isHighlighted
+            UIView.animate(withDuration: 0.18, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+                self.contentView.transform = pressed ? CGAffineTransform(scaleX: 0.97, y: 0.97) : .identity
+            }
+        }
+    }
+
     override func prepareForReuse() {
         super.prepareForReuse()
         loadTask?.cancel()
         loadTask = nil
+        durationTask?.cancel()
+        durationTask = nil
         representedURL = nil
         thumbnail.image = nil
         placeholder.isHidden = false
         duration.isHidden = true
+        shade.isHidden = true
+        contentView.transform = .identity
         setSelectionMode(false, selected: false)
     }
 
     func setSelectionMode(_ enabled: Bool, selected: Bool) {
         selectionBadge.isHidden = !enabled
-        selectionBadge.image = UIImage(systemName: selected ? "checkmark.square.fill" : "square")
-        selectionBadge.tintColor = selected ? SColor.mint : .white
-        thumbnail.layer.borderWidth = selected ? 3 : 1
-        thumbnail.layer.borderColor = (selected ? SColor.mint : SColor.line).cgColor
+        selectionBadge.backgroundColor = selected ? SColor.mint : UIColor.black.withAlphaComponent(0.25)
+        selectionBadge.layer.borderWidth = selected ? 0 : 2
+        selectionCheck.isHidden = !selected
+        selectionCheck.tintColor = SColor.onAccent
+        thumbnail.layer.borderWidth = selected ? 3 : 0
+        thumbnail.layer.borderColor = SColor.mint.cgColor
         accessibilityTraits = selected ? [.button, .selected] : [.button]
         accessibilityHint = enabled ? "Double tap to \(selected ? "deselect" : "select") video" : "Double tap to play video"
     }
 
     func configure(url: URL, size: Int64) {
+        loadTask?.cancel()
+        durationTask?.cancel()
         representedURL = url
         name.text = url.deletingPathExtension().lastPathComponent
-        detail.text = "\(url.pathExtension.uppercased()) · \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))"
+        let ext = url.pathExtension.uppercased()
+        let bytes = ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+        detail.text = ext.isEmpty ? bytes : "\(ext) · \(bytes)"
+        isAccessibilityElement = true
         accessibilityLabel = url.lastPathComponent
         let side = CGSize(width: 320, height: 180)
         if let cached = ThumbnailProvider.shared.cached(for: url, size: side) {
@@ -416,18 +492,22 @@ private final class VideoGalleryCell: UICollectionViewCell {
             loadTask = Task { [weak self] in
                 let image = await ThumbnailProvider.shared.thumbnail(for: url, size: side, scale: scale)
                 guard !Task.isCancelled, let self, self.representedURL == url, let image else { return }
-                self.thumbnail.image = image
                 self.placeholder.isHidden = true
+                UIView.transition(with: self.thumbnail, duration: 0.2, options: .transitionCrossDissolve) {
+                    self.thumbnail.image = image
+                }
             }
         }
-        Task { [weak self] in
+        durationTask = Task { [weak self] in
             guard let seconds = await ThumbnailProvider.shared.duration(of: url), seconds.isFinite, seconds > 0 else { return }
-            guard let self, self.representedURL == url else { return }
+            guard !Task.isCancelled, let self, self.representedURL == url else { return }
             let total = Int(seconds.rounded())
             self.duration.text = total >= 3600
-                ? String(format: " %d:%02d:%02d ", total / 3600, total / 60 % 60, total % 60)
-                : String(format: " %d:%02d ", total / 60, total % 60)
+                ? String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
+                : String(format: "%d:%02d", total / 60, total % 60)
             self.duration.isHidden = false
+            self.shade.isHidden = false
+            self.accessibilityValue = self.duration.text
         }
     }
 }

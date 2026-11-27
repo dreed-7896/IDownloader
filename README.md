@@ -25,6 +25,8 @@ Every successful build on `main` publishes a new IPA; the combined source picks 
 - Menu sheet: ad blocker for this site, desktop site, dark pages, private tab, find on page, bookmarks, history, downloads, files, settings, search engine (Google, DuckDuckGo, Bing, Brave), clear browsing data
 - Tabs and private tabs: swipe the address bar left/right to switch tabs, hold the tabs button to open a new tab; long-press Back for history, pull to refresh
 - Long-press a link to open it in a new or private tab, download it or bookmark it
+- Address suggestions with a Search/Go row, bookmarks and history with site icons
+- The status bar takes the website's own color, like Safari; the dock's Downloads button shows a live progress ring
 
 ### Ad blocker
 

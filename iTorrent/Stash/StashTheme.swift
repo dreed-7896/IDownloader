@@ -196,7 +196,6 @@ enum StashTheme {
         SFont.register()
         overrideSystemColors()
         if SFont.available { overrideSystemFonts() }
-        squareBackgroundConfigurations()
         removeLiquidGlass()
         applyAppearance()
     }
@@ -287,15 +286,6 @@ enum StashTheme {
         }
     }
 
-    /// Square corners for list cells and button backgrounds (UIKit and SwiftUI lists).
-    private static func squareBackgroundConfigurations() {
-        guard let cls = NSClassFromString("UIBackgroundConfiguration") else { return }
-        let selector = NSSelectorFromString("cornerRadius")
-        guard let method = class_getInstanceMethod(cls, selector) else { return }
-        let block: @convention(block) (AnyObject) -> CGFloat = { _ in 0 }
-        method_setImplementation(method, imp_implementationWithBlock(block))
-    }
-
     /// Flat and boxy: bar buttons lose their glass capsules, scroll views lose the blurred edge
     /// under the bars, and sheets get square corners. Each hook is skipped where the OS lacks it.
     private static func removeLiquidGlass() {
@@ -372,9 +362,10 @@ enum StashTheme {
         navigationBar.compactScrollEdgeAppearance = edge
 
         let toolbar = UIToolbarAppearance()
+        // Toolbars blend into the screen; their rounded buttons carry the shape.
         toolbar.configureWithOpaqueBackground()
-        toolbar.backgroundColor = SColor.s1
-        toolbar.shadowColor = SColor.line2
+        toolbar.backgroundColor = SColor.bg
+        toolbar.shadowColor = .clear
         UIToolbar.appearance().standardAppearance = toolbar
         UIToolbar.appearance().scrollEdgeAppearance = toolbar
         UIToolbar.appearance().compactAppearance = toolbar

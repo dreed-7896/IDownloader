@@ -13,6 +13,9 @@ enum Icon: String {
     case back, forward, home, menu, downloads, saveVideo, shield, shieldOff, reload, stop, search, share
     case bookmark, bookmarkAdd, bookmarkRemove, history, folder, settings, desktop, moon, incognito, find
     case add, addSquare, copy, delete, link, globe, grid, video, lock, tick, close, sparkles
+    case play, pause, playCircle, file, fileVideo, fileMusic, fileZip, image, music, magnet, film, alert, info, more
+    case edit, upload, folderOpen, folderAdd, checkCircle, refresh, speed, timer, calendar, drive, star, rss, airplay, pip
+    case grid2, list, sort, filter, inbox, wifi, faceId, bell, palette, unlink, expand
 
     var assetName: String { "hi." + rawValue }
 
