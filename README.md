@@ -23,7 +23,7 @@ Every successful build on `main` publishes a new IPA; the combined source picks 
 - One bottom dock: address bar with the ad-block shield, then Back, Forward/Home, Menu, Downloads (with a running-downloads badge) and Tabs. It tucks away while you scroll down and sits on the keyboard while you type
 - Start page and bookmarks show page snapshots (taken when you save a page and refreshed when you visit it); history shows site icons
 - Menu sheet: ad blocker for this site, desktop site, dark pages, private tab, find on page, bookmarks, history, downloads, files, settings, search engine (Google, DuckDuckGo, Bing, Brave), clear browsing data
-- Tabs and private tabs (hold the tabs button for quick actions), long-press Back for history, pull to refresh
+- Tabs and private tabs: swipe the address bar left/right to switch tabs, hold the tabs button to open a new tab; long-press Back for history, pull to refresh
 - Long-press a link to open it in a new or private tab, download it or bookmark it
 
 ### Ad blocker
@@ -85,4 +85,4 @@ The **Build and publish Stash** workflow (the IPA is still named `Stash.ipa`) bu
 
 Drift is based on [iTorrent by XITRIX (Daniil Vinogradov)](https://github.com/XITRIX/iTorrent), distributed under the [MIT license](LICENSE.txt). The original copyright notice is preserved. This is an independently maintained project and does not automatically synchronize with upstream.
 
-Includes LibTorrent, LibTorrent-Swift, MVVMFoundation, GCDWebServer, SwiftVLC, and other dependencies under their respective licenses.
+Includes LibTorrent, LibTorrent-Swift, MVVMFoundation, GCDWebServer, SwiftVLC, [Hugeicons](https://hugeicons.com) free icons (MIT, see `docs/licenses`), and other dependencies under their respective licenses.

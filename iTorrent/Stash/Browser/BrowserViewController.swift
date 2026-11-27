@@ -26,12 +26,12 @@ final class BrowserViewController: UIViewController {
     private let suggestionsView = UITableView(frame: .zero, style: .plain)
     private var suggestions: [BrowserHistoryEntry] = []
     private weak var shownWebView: WKWebView?
+    private var shownTabID: UUID?
     private var scrollObservation: NSKeyValueObservation?
     private var lastScrollOffset: CGFloat = 0
 
     // Dock
     private let dock = UIView()
-    private let dockFill = UIView()
     private let progressView = UIProgressView(progressViewStyle: .bar)
     private let addressBox = UIView()
     private let shieldButton = UIButton(type: .system)
@@ -62,7 +62,10 @@ final class BrowserViewController: UIViewController {
         buildSuggestions()
 
         session.$selectedID.removeDuplicates().receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.showSelectedTab() }
+            .sink { [weak self] id in
+                guard let self, id != self.shownTabID || id == nil else { return }
+                self.showSelectedTab()
+            }
             .store(in: &subscriptions)
         session.$tabs.receive(on: DispatchQueue.main)
             .sink { [weak self] tabs in self?.updateTabsButton(count: tabs.count) }
@@ -90,53 +93,57 @@ final class BrowserViewController: UIViewController {
 
     // MARK: - Layout
 
-    private func iconButton(_ button: UIButton, _ symbol: String, label: String, size: CGFloat = 19) {
+    private func iconButton(_ button: UIButton, _ icon: Icon, label: String, size: CGFloat = 24) {
         var configuration = UIButton.Configuration.plain()
-        configuration.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: size, weight: .semibold))
+        configuration.image = icon.image(size)
         configuration.baseForegroundColor = SColor.text
         configuration.contentInsets = .zero
         button.configuration = configuration
         button.accessibilityLabel = label
         button.configurationUpdateHandler = { button in
             var updated = button.configuration
-            updated?.baseForegroundColor = button.isEnabled ? SColor.text : SColor.text3.withAlphaComponent(0.45)
+            updated?.baseForegroundColor = button.isEnabled ? SColor.text : SColor.text3.withAlphaComponent(0.4)
             button.configuration = updated
+            button.alpha = button.isHighlighted ? 0.55 : 1
         }
     }
 
     private func buildDock() {
-        dockFill.backgroundColor = SColor.s1
-        dockFill.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(dockFill)
-
+        // A floating rounded dock above the home indicator (and above the keyboard while typing).
         dock.backgroundColor = SColor.s1
+        dock.layer.cornerRadius = 26
+        dock.layer.cornerCurve = .continuous
+        dock.layer.borderWidth = 1
+        dock.layer.borderColor = UIColor.white.withAlphaComponent(0.07).cgColor
+        dock.layer.shadowColor = UIColor.black.cgColor
+        dock.layer.shadowOpacity = 0.45
+        dock.layer.shadowRadius = 18
+        dock.layer.shadowOffset = CGSize(width: 0, height: 6)
         dock.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(dock)
 
-        let line = UIView()
-        line.backgroundColor = SColor.line2
-        line.translatesAutoresizingMaskIntoConstraints = false
-        dock.addSubview(line)
+        // Address capsule: shield | field | reload, with the load progress along its bottom edge.
+        addressBox.backgroundColor = SColor.s2
+        addressBox.layer.cornerRadius = 21
+        addressBox.layer.cornerCurve = .continuous
+        addressBox.layer.borderColor = UIColor.clear.cgColor
+        addressBox.layer.borderWidth = 1.5
+        addressBox.clipsToBounds = true
+        addressBox.translatesAutoresizingMaskIntoConstraints = false
 
         progressView.trackTintColor = .clear
         progressView.alpha = 0
         progressView.translatesAutoresizingMaskIntoConstraints = false
-        dock.addSubview(progressView)
+        addressBox.addSubview(progressView)
 
-        // Address box: shield | field | reload
-        addressBox.backgroundColor = SColor.s2
-        addressBox.layer.borderWidth = 1
-        addressBox.layer.borderColor = SColor.line2.cgColor
-        addressBox.translatesAutoresizingMaskIntoConstraints = false
-
-        iconButton(shieldButton, "shield.lefthalf.filled", label: "Ad blocker", size: 16)
+        iconButton(shieldButton, .shield, label: "Ad blocker", size: 21)
         shieldButton.showsMenuAsPrimaryAction = true
         shieldButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             completion(self?.shieldMenu() ?? [])
         }])
 
         let divider = UIView()
-        divider.backgroundColor = SColor.line2
+        divider.backgroundColor = UIColor.white.withAlphaComponent(0.1)
         divider.translatesAutoresizingMaskIntoConstraints = false
 
         addressField.placeholder = "Search or enter address"
@@ -152,7 +159,7 @@ final class BrowserViewController: UIViewController {
         addressField.delegate = self
         addressField.addTarget(self, action: #selector(addressChanged), for: .editingChanged)
 
-        iconButton(reloadButton, "arrow.clockwise", label: "Reload", size: 16)
+        iconButton(reloadButton, .reload, label: "Reload", size: 20)
         reloadButton.addTarget(self, action: #selector(reloadOrStop), for: .touchUpInside)
 
         let inner = UIStackView(arrangedSubviews: [shieldButton, divider, addressField, reloadButton])
@@ -161,11 +168,18 @@ final class BrowserViewController: UIViewController {
         inner.translatesAutoresizingMaskIntoConstraints = false
         addressBox.addSubview(inner)
 
+        // Swipe the address bar to move between tabs.
+        for direction in [UISwipeGestureRecognizer.Direction.left, .right] {
+            let swipe = UISwipeGestureRecognizer(target: self, action: #selector(addressSwiped(_:)))
+            swipe.direction = direction
+            addressBox.addGestureRecognizer(swipe)
+        }
+
         var cancel = UIButton.Configuration.plain()
         var cancelTitle = AttributedString("Cancel")
         cancelTitle.font = SFont.ui(15, .semibold) ?? .systemFont(ofSize: 15, weight: .semibold)
         cancel.attributedTitle = cancelTitle
-        cancel.contentInsets = .init(top: 0, leading: 12, bottom: 0, trailing: 2)
+        cancel.contentInsets = .init(top: 0, leading: 12, bottom: 0, trailing: 4)
         cancelButton.configuration = cancel
         cancelButton.isHidden = true
         cancelButton.addTarget(self, action: #selector(cancelEditing), for: .touchUpInside)
@@ -175,77 +189,71 @@ final class BrowserViewController: UIViewController {
         let addressRow = UIStackView(arrangedSubviews: [addressBox, cancelButton])
         addressRow.alignment = .fill
         addressRow.isLayoutMarginsRelativeArrangement = true
-        addressRow.directionalLayoutMargins = .init(top: 10, leading: 12, bottom: 6, trailing: 12)
+        addressRow.directionalLayoutMargins = .init(top: 8, leading: 8, bottom: 2, trailing: 8)
 
         // Buttons: back, forward/home, menu, downloads, tabs
-        iconButton(backButton, "chevron.backward", label: "Back")
-        iconButton(forwardButton, "chevron.forward", label: "Forward")
-        iconButton(menuButton, "line.3.horizontal", label: "Menu", size: 20)
-        iconButton(downloadsButton, "arrow.down.circle", label: "Downloads", size: 20)
+        iconButton(backButton, .back, label: "Back")
+        iconButton(forwardButton, .forward, label: "Forward")
+        iconButton(menuButton, .menu, label: "Menu")
+        iconButton(downloadsButton, .downloads, label: "Downloads")
         backButton.addTarget(self, action: #selector(goBack), for: .touchUpInside)
         forwardButton.addTarget(self, action: #selector(goForwardOrHome), for: .touchUpInside)
         menuButton.addTarget(self, action: #selector(showMenu), for: .touchUpInside)
         downloadsButton.addTarget(self, action: #selector(showDownloads), for: .touchUpInside)
         tabsButton.addTarget(self, action: #selector(showTabs), for: .touchUpInside)
         tabsButton.accessibilityLabel = "Tabs"
+        tabsButton.accessibilityHint = "Hold to open a new tab"
         backButton.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(backLongPress(_:))))
-        let tabsHold = UILongPressGestureRecognizer(target: self, action: #selector(tabsLongPress(_:)))
-        tabsButton.addGestureRecognizer(tabsHold)
+        tabsButton.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(tabsLongPress(_:))))
 
-        downloadsBadge.font = SFont.mono(10, .bold) ?? .monospacedSystemFont(ofSize: 10, weight: .bold)
+        downloadsBadge.font = SFont.ui(10, .bold) ?? .systemFont(ofSize: 10, weight: .bold)
         downloadsBadge.textAlignment = .center
         downloadsBadge.isHidden = true
+        downloadsBadge.layer.cornerRadius = 9
+        downloadsBadge.layer.masksToBounds = true
         downloadsBadge.translatesAutoresizingMaskIntoConstraints = false
         downloadsButton.addSubview(downloadsBadge)
 
         for button in [backButton, forwardButton, menuButton, downloadsButton, tabsButton] { buttonRow.addArrangedSubview(button) }
         buttonRow.distribution = .fillEqually
-        buttonRow.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        buttonRow.heightAnchor.constraint(equalToConstant: 50).isActive = true
 
         let stack = UIStackView(arrangedSubviews: [addressRow, buttonRow])
         stack.axis = .vertical
         stack.translatesAutoresizingMaskIntoConstraints = false
         dock.addSubview(stack)
 
+        let bottom = dock.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -6)
         NSLayoutConstraint.activate([
-            dock.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            dock.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            dock.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
-            dockFill.topAnchor.constraint(equalTo: dock.bottomAnchor),
-            dockFill.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            dockFill.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            dockFill.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            dock.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 10),
+            dock.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -10),
+            bottom,
 
-            line.topAnchor.constraint(equalTo: dock.topAnchor),
-            line.leadingAnchor.constraint(equalTo: dock.leadingAnchor),
-            line.trailingAnchor.constraint(equalTo: dock.trailingAnchor),
-            line.heightAnchor.constraint(equalToConstant: 1),
-            progressView.topAnchor.constraint(equalTo: dock.topAnchor),
-            progressView.leadingAnchor.constraint(equalTo: dock.leadingAnchor),
-            progressView.trailingAnchor.constraint(equalTo: dock.trailingAnchor),
-            progressView.heightAnchor.constraint(equalToConstant: 2),
-
-            stack.topAnchor.constraint(equalTo: dock.topAnchor, constant: 1),
-            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: dock.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: dock.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: dock.trailingAnchor),
             stack.bottomAnchor.constraint(equalTo: dock.bottomAnchor, constant: -2),
 
             addressBox.heightAnchor.constraint(equalToConstant: 44),
-            inner.leadingAnchor.constraint(equalTo: addressBox.leadingAnchor, constant: 4),
-            inner.trailingAnchor.constraint(equalTo: addressBox.trailingAnchor, constant: -4),
+            inner.leadingAnchor.constraint(equalTo: addressBox.leadingAnchor, constant: 6),
+            inner.trailingAnchor.constraint(equalTo: addressBox.trailingAnchor, constant: -6),
             inner.topAnchor.constraint(equalTo: addressBox.topAnchor),
             inner.bottomAnchor.constraint(equalTo: addressBox.bottomAnchor),
-            shieldButton.widthAnchor.constraint(equalToConstant: 36),
-            shieldButton.heightAnchor.constraint(equalToConstant: 36),
+            shieldButton.widthAnchor.constraint(equalToConstant: 34),
+            shieldButton.heightAnchor.constraint(equalToConstant: 34),
             divider.widthAnchor.constraint(equalToConstant: 1),
-            divider.heightAnchor.constraint(equalToConstant: 22),
-            reloadButton.widthAnchor.constraint(equalToConstant: 36),
-            reloadButton.heightAnchor.constraint(equalToConstant: 36),
+            divider.heightAnchor.constraint(equalToConstant: 20),
+            reloadButton.widthAnchor.constraint(equalToConstant: 34),
+            reloadButton.heightAnchor.constraint(equalToConstant: 34),
+            progressView.leadingAnchor.constraint(equalTo: addressBox.leadingAnchor),
+            progressView.trailingAnchor.constraint(equalTo: addressBox.trailingAnchor),
+            progressView.bottomAnchor.constraint(equalTo: addressBox.bottomAnchor),
+            progressView.heightAnchor.constraint(equalToConstant: 2.5),
 
-            downloadsBadge.centerXAnchor.constraint(equalTo: downloadsButton.centerXAnchor, constant: 12),
+            downloadsBadge.leadingAnchor.constraint(equalTo: downloadsButton.centerXAnchor, constant: 4),
             downloadsBadge.centerYAnchor.constraint(equalTo: downloadsButton.centerYAnchor, constant: -10),
-            downloadsBadge.heightAnchor.constraint(equalToConstant: 17),
-            downloadsBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 17)
+            downloadsBadge.heightAnchor.constraint(equalToConstant: 18),
+            downloadsBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 18)
         ])
         updateTabsButton(count: session.tabs.count)
     }
@@ -258,47 +266,48 @@ final class BrowserViewController: UIViewController {
             contentView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: dock.topAnchor)
+            contentView.bottomAnchor.constraint(equalTo: dock.topAnchor, constant: -8)
         ])
     }
 
     private func buildVideoButton() {
         var configuration = UIButton.Configuration.filled()
-        configuration.image = UIImage(systemName: "arrow.down.to.line.compact", withConfiguration: UIImage.SymbolConfiguration(pointSize: 21, weight: .bold))
-        configuration.cornerStyle = .fixed
-        configuration.background.cornerRadius = 0
+        configuration.image = Icon.saveVideo.image(26)
+        configuration.cornerStyle = .capsule
         videoButton.configuration = configuration
         videoButton.configurationUpdateHandler = { button in
             var updated = button.configuration
-            updated?.baseBackgroundColor = button.tintColor
+            updated?.baseBackgroundColor = SColor.mint
             updated?.baseForegroundColor = SColor.onAccent
             button.configuration = updated
-            button.alpha = button.isHighlighted ? 0.8 : 1
+            button.transform = button.isHighlighted ? CGAffineTransform(scaleX: 0.92, y: 0.92) : .identity
         }
         videoButton.accessibilityLabel = "Save video"
         videoButton.layer.shadowColor = UIColor.black.cgColor
-        videoButton.layer.shadowOpacity = 0.35
-        videoButton.layer.shadowRadius = 10
-        videoButton.layer.shadowOffset = CGSize(width: 0, height: 4)
+        videoButton.layer.shadowOpacity = 0.4
+        videoButton.layer.shadowRadius = 12
+        videoButton.layer.shadowOffset = CGSize(width: 0, height: 5)
         videoButton.addTarget(self, action: #selector(showMedia), for: .touchUpInside)
         videoButton.translatesAutoresizingMaskIntoConstraints = false
         videoButton.isHidden = true
         view.addSubview(videoButton)
 
-        videoBadge.font = SFont.mono(11, .bold) ?? .monospacedSystemFont(ofSize: 11, weight: .bold)
+        videoBadge.font = SFont.ui(11, .bold) ?? .systemFont(ofSize: 11, weight: .bold)
         videoBadge.textColor = SColor.bg
         videoBadge.backgroundColor = SColor.text
         videoBadge.textAlignment = .center
+        videoBadge.layer.cornerRadius = 10
+        videoBadge.layer.masksToBounds = true
         videoBadge.translatesAutoresizingMaskIntoConstraints = false
         videoButton.addSubview(videoBadge)
 
         NSLayoutConstraint.activate([
-            videoButton.widthAnchor.constraint(equalToConstant: 56),
-            videoButton.heightAnchor.constraint(equalToConstant: 56),
-            videoButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            videoButton.widthAnchor.constraint(equalToConstant: 58),
+            videoButton.heightAnchor.constraint(equalToConstant: 58),
+            videoButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -18),
             videoButton.bottomAnchor.constraint(equalTo: dock.topAnchor, constant: -16),
-            videoBadge.topAnchor.constraint(equalTo: videoButton.topAnchor, constant: -6),
-            videoBadge.trailingAnchor.constraint(equalTo: videoButton.trailingAnchor, constant: 6),
+            videoBadge.topAnchor.constraint(equalTo: videoButton.topAnchor, constant: -4),
+            videoBadge.trailingAnchor.constraint(equalTo: videoButton.trailingAnchor, constant: 4),
             videoBadge.heightAnchor.constraint(equalToConstant: 20),
             videoBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 20)
         ])
@@ -318,30 +327,40 @@ final class BrowserViewController: UIViewController {
             suggestionsView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             suggestionsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             suggestionsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            suggestionsView.bottomAnchor.constraint(equalTo: dock.topAnchor)
+            suggestionsView.bottomAnchor.constraint(equalTo: dock.topAnchor, constant: -8)
         ])
     }
 
     // MARK: - Dock state
 
+    /// A rounded square with the tab count; filled for a private tab.
+    private static func tabsImage(count: Int, filled: Bool) -> UIImage {
+        let size = CGSize(width: 24, height: 24)
+        let text = count > 99 ? "∞" : "\(count)"
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            let rect = CGRect(origin: .zero, size: size).insetBy(dx: 2, dy: 2)
+            let path = UIBezierPath(roundedRect: rect, cornerRadius: 6)
+            UIColor.black.setStroke()
+            UIColor.black.setFill()
+            path.lineWidth = 1.6
+            if filled { path.fill() } else { path.stroke() }
+            let font = SFont.ui(text.count > 1 ? 10 : 11.5, .bold) ?? .systemFont(ofSize: 11, weight: .bold)
+            let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.black]
+            let textSize = (text as NSString).size(withAttributes: attributes)
+            let origin = CGPoint(x: (size.width - textSize.width) / 2, y: (size.height - textSize.height) / 2)
+            if filled { context.cgContext.setBlendMode(.clear) }
+            (text as NSString).draw(at: origin, withAttributes: attributes)
+        }
+        return image.withRenderingMode(.alwaysTemplate)
+    }
+
     private func updateTabsButton(count: Int) {
         var configuration = UIButton.Configuration.plain()
-        var title = AttributedString(count > 99 ? "∞" : "\(count)")
-        title.font = SFont.mono(13, .bold) ?? .monospacedSystemFont(ofSize: 13, weight: .bold)
-        configuration.attributedTitle = title
-        configuration.background.strokeWidth = 2
-        configuration.background.cornerRadius = 0
-        configuration.cornerStyle = .fixed
-        configuration.contentInsets = .init(top: 2, leading: 6, bottom: 2, trailing: 6)
-        if session.selected?.isPrivate == true {
-            configuration.background.backgroundColor = SColor.text
-            configuration.background.strokeColor = SColor.text
-            configuration.baseForegroundColor = SColor.s1
-        } else {
-            configuration.background.strokeColor = SColor.text
-            configuration.baseForegroundColor = SColor.text
-        }
+        configuration.image = Self.tabsImage(count: count, filled: session.selected?.isPrivate == true)
+        configuration.baseForegroundColor = SColor.text
+        configuration.contentInsets = .zero
         tabsButton.configuration = configuration
+        tabsButton.configurationUpdateHandler = { button in button.alpha = button.isHighlighted ? 0.55 : 1 }
         tabsButton.accessibilityValue = "\(count) tabs"
     }
 
@@ -351,21 +370,18 @@ final class BrowserViewController: UIViewController {
         // Fixed colors: the dock's tint isn't resolved before the view is on screen.
         downloadsBadge.backgroundColor = SColor.mint
         downloadsBadge.textColor = SColor.onAccent
-        downloadsBadge.layer.borderColor = SColor.s1.cgColor
-        downloadsBadge.layer.borderWidth = 1.5
     }
 
     private func updateShield() {
         let tab = session.selected
         let page = tab?.isHome == true ? nil : tab?.url
         let active = BrowserStore.shared.isAdBlockActive(on: page)
-        shieldButton.configuration?.image = UIImage(systemName: active ? "shield.lefthalf.filled" : "shield.slash",
-                                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold))
-        shieldButton.tintColor = active ? view.tintColor : SColor.text3
+        shieldButton.configuration?.image = (active ? Icon.shield : Icon.shieldOff).image(21)
         shieldButton.configurationUpdateHandler = { button in
             var updated = button.configuration
-            updated?.baseForegroundColor = active ? button.tintColor : SColor.text3
+            updated?.baseForegroundColor = active ? SColor.mint : SColor.text3
             button.configuration = updated
+            button.alpha = button.isHighlighted ? 0.55 : 1
         }
         shieldButton.setNeedsUpdateConfiguration()
         shieldButton.accessibilityValue = active ? "On" : "Off"
@@ -375,11 +391,50 @@ final class BrowserViewController: UIViewController {
         guard let tab = session.selected else { return }
         let onPage = tab.isWebViewLoaded && !tab.isHome
         backButton.isEnabled = tab.isHome ? tab.isWebViewLoaded : tab.canGoBack
-        let showsForward = onPage && tab.canGoForward
-        let symbol = showsForward || !onPage ? "chevron.forward" : "house"
-        forwardButton.configuration?.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold))
-        forwardButton.accessibilityLabel = symbol == "house" ? "Home" : "Forward"
+        let showsHome = onPage && !tab.canGoForward
+        forwardButton.configuration?.image = (showsHome ? Icon.home : Icon.forward).image(24)
+        forwardButton.accessibilityLabel = showsHome ? "Home" : "Forward"
         forwardButton.isEnabled = onPage || (tab.isHome && tab.canGoForward)
+    }
+
+    // MARK: - Tab switching
+
+    @objc private func addressSwiped(_ gesture: UISwipeGestureRecognizer) {
+        guard !isEditingAddress else { return }
+        switchTab(by: gesture.direction == .left ? 1 : -1)
+    }
+
+    /// Slides to the next or previous tab (swiping the address bar).
+    private func switchTab(by offset: Int) {
+        guard let index = session.selectedIndex else { return }
+        let target = index + offset
+        guard session.tabs.indices.contains(target) else {
+            // Nudge: there's no tab that way.
+            let shift: CGFloat = offset > 0 ? -10 : 10
+            UIView.animate(withDuration: 0.12, animations: { self.addressBox.transform = CGAffineTransform(translationX: shift, y: 0) }) { _ in
+                UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.5, initialSpringVelocity: 0.8) {
+                    self.addressBox.transform = .identity
+                }
+            }
+            return
+        }
+        UISelectionFeedbackGenerator().selectionChanged()
+        let width = contentView.bounds.width
+        let snapshot = contentView.snapshotView(afterScreenUpdates: false)
+        if let snapshot {
+            snapshot.frame = contentView.frame
+            view.insertSubview(snapshot, aboveSubview: contentView)
+        }
+        session.select(session.tabs[target].id)
+        showSelectedTab()
+        contentView.transform = CGAffineTransform(translationX: offset > 0 ? width : -width, y: 0)
+        UIView.animate(withDuration: 0.32, delay: 0, options: .curveEaseOut) {
+            self.contentView.transform = .identity
+            snapshot?.transform = CGAffineTransform(translationX: offset > 0 ? -width * 0.35 : width * 0.35, y: 0)
+            snapshot?.alpha = 0
+        } completion: { _ in
+            snapshot?.removeFromSuperview()
+        }
     }
 
     private func setDockCollapsed(_ collapsed: Bool, animated: Bool = true) {
@@ -407,6 +462,7 @@ final class BrowserViewController: UIViewController {
 
     private func showSelectedTab() {
         guard let tab = session.selected else { return }
+        shownTabID = tab.id
         tabSubscriptions.removeAll()
         scrollObservation = nil
         shownWebView?.removeFromSuperview()
@@ -548,8 +604,7 @@ final class BrowserViewController: UIViewController {
                 self.progressView.setProgress(0, animated: false)
             }
         }
-        let symbol = loading ? "xmark" : "arrow.clockwise"
-        reloadButton.configuration?.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold))
+        reloadButton.configuration?.image = (loading ? Icon.stop : Icon.reload).image(20)
         reloadButton.accessibilityLabel = loading ? "Stop" : "Reload"
         if loading { setDockCollapsed(false) }
     }
@@ -622,16 +677,12 @@ final class BrowserViewController: UIViewController {
     }
 
     @objc private func tabsLongPress(_ gesture: UILongPressGestureRecognizer) {
+        // Hold the tabs button: open a new tab right away.
         guard gesture.state == .began else { return }
-        let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: "New tab", style: .default) { [weak self] _ in self?.session.newTab() })
-        sheet.addAction(UIAlertAction(title: "New private tab", style: .default) { [weak self] _ in self?.session.newTab(isPrivate: true) })
-        if let tab = session.selected {
-            sheet.addAction(UIAlertAction(title: "Close this tab", style: .destructive) { [weak self] _ in self?.session.close(tab.id) })
-        }
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        sheet.popoverPresentationController?.sourceView = tabsButton
-        present(sheet, animated: true)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        addressField.resignFirstResponder()
+        session.newTab(isPrivate: session.selected?.isPrivate ?? false)
+        toast(session.selected?.isPrivate == true ? "New private tab" : "New tab")
     }
 
     @objc private func showDownloads() {
@@ -729,9 +780,9 @@ final class BrowserViewController: UIViewController {
         case .history:
             showLibrary(section: 1)
         case .files:
-            openInDownloads(FileBrowserViewController())
+            presentSheet(FileBrowserViewController())
         case .settings:
-            openInDownloads(PreferencesViewModel().resolveVC())
+            presentSheet(PreferencesViewModel().resolveVC())
         case .downloads:
             AppRootController.current?.showDownloads()
         case .toggleBookmark:
@@ -781,15 +832,21 @@ final class BrowserViewController: UIViewController {
         }
     }
 
-    /// Opens a screen inside the Downloads sheet, so Back leads to the downloads list.
-    private func openInDownloads(_ controller: UIViewController) {
-        guard let root = AppRootController.current else { return }
-        root.showDownloads {
-            let navigation = root.downloads
-            if let first = navigation.viewControllers.first {
-                navigation.setViewControllers([first, controller], animated: navigation.viewControllers.count == 1)
-            }
+    /// Files and Settings open as their own sheets (with their own navigation), separate from Downloads.
+    private func presentSheet(_ controller: UIViewController) {
+        let navigation = UINavigationController.resolve()
+        navigation.viewControllers = [controller]
+        navigation.modalPresentationStyle = .pageSheet
+        if let sheet = navigation.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
         }
+        let close = UIBarButtonItem(image: Icon.close.image(24), primaryAction: UIAction { [weak navigation] _ in
+            navigation?.dismiss(animated: true)
+        })
+        close.accessibilityLabel = "Close"
+        controller.navigationItem.leadingItemGroups.insert(.fixedGroup(items: [close]), at: 0)
+        present(navigation, animated: true)
     }
 
     private func shieldMenu() -> [UIMenuElement] {
@@ -800,12 +857,12 @@ final class BrowserViewController: UIViewController {
         if let page, let host = BrowserStore.siteKey(page), store.adBlockEnabled {
             let active = store.isAdBlockActive(on: page)
             items.append(UIAction(title: active ? "Allow ads on \(host)" : "Block ads on \(host)",
-                                  image: UIImage(systemName: active ? "shield.slash" : "shield.lefthalf.filled")) { [weak self] _ in
+                                  image: (active ? Icon.shieldOff : Icon.shield).image(22)) { [weak self] _ in
                 store.setAdBlock(!active, on: page)
                 self?.updateShield()
             })
         }
-        items.append(UIAction(title: "Ad blocker", image: UIImage(systemName: "shield"), state: store.adBlockEnabled ? .on : .off) { [weak self] _ in
+        items.append(UIAction(title: "Ad blocker", image: Icon.shield.image(22), state: store.adBlockEnabled ? .on : .off) { [weak self] _ in
             store.adBlockEnabled.toggle()
             self?.updateShield()
         })
@@ -947,6 +1004,11 @@ final class BrowserViewController: UIViewController {
         toastView?.removeFromSuperview()
         let box = UIView()
         box.backgroundColor = SColor.text
+        box.layer.cornerRadius = 16
+        box.layer.cornerCurve = .continuous
+        box.layer.shadowColor = UIColor.black.cgColor
+        box.layer.shadowOpacity = 0.3
+        box.layer.shadowRadius = 10
         box.translatesAutoresizingMaskIntoConstraints = false
         let label = UILabel()
         label.text = message
@@ -1015,7 +1077,7 @@ extension BrowserViewController: UITextFieldDelegate {
 
     func textFieldDidEndEditing(_ textField: UITextField) {
         isEditingAddress = false
-        addressBox.layer.borderColor = SColor.line2.cgColor
+        addressBox.layer.borderColor = UIColor.clear.cgColor
         suggestionsView.isHidden = true
         UIView.animate(withDuration: 0.2) {
             self.cancelButton.isHidden = true
@@ -1049,7 +1111,7 @@ extension BrowserViewController: UITableViewDataSource, UITableViewDelegate {
         content.textProperties.color = SColor.text
         content.secondaryTextProperties.font = SFont.mono(12, .medium) ?? .monospacedSystemFont(ofSize: 12, weight: .medium)
         content.secondaryTextProperties.color = SColor.text3
-        content.image = SiteIconCache.shared.cached(for: entry.url) ?? UIImage(systemName: entry.date == .distantPast ? "star" : "clock")
+        content.image = SiteIconCache.shared.cached(for: entry.url) ?? (entry.date == .distantPast ? Icon.bookmark : Icon.history).image(22)
         content.imageProperties.maximumSize = CGSize(width: 28, height: 28)
         content.imageProperties.reservedLayoutSize = CGSize(width: 28, height: 28)
         content.imageProperties.tintColor = SColor.text3
@@ -1218,23 +1280,23 @@ extension BrowserViewController: WKNavigationDelegate, WKUIDelegate {
         let isMedia = PageMediaResolver.mediaExtensions.contains(url.pathExtension.lowercased()) || HLSDownloader.isPlaylist(url)
         completionHandler(UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] suggested in
             var actions: [UIMenuElement] = [
-                UIAction(title: "Open in new tab", image: UIImage(systemName: "plus.square.on.square")) { _ in
+                UIAction(title: "Open in new tab", image: Icon.addSquare.image(22)) { _ in
                     self?.session.newTab(url: url, isPrivate: tab?.isPrivate ?? false, afterCurrent: true, select: false)
                     self?.toast("Opened in a new tab")
                 },
-                UIAction(title: "Open in private tab", image: UIImage(systemName: "eyeglasses")) { _ in
+                UIAction(title: "Open in private tab", image: Icon.incognito.image(22)) { _ in
                     self?.session.newTab(url: url, isPrivate: true, afterCurrent: true, select: false)
                     self?.toast("Opened in a private tab")
                 },
-                UIAction(title: isMedia ? "Download video" : "Download link", image: UIImage(systemName: "arrow.down.to.line")) { _ in
+                UIAction(title: isMedia ? "Download video" : "Download link", image: Icon.saveVideo.image(22)) { _ in
                     self?.downloadLink(url, from: tab, isFile: isMedia)
                 },
-                UIAction(title: "Copy link", image: UIImage(systemName: "doc.on.doc")) { _ in
+                UIAction(title: "Copy link", image: Icon.copy.image(22)) { _ in
                     UIPasteboard.general.url = url
                 }
             ]
             if BrowserStore.shared.bookmarks.contains(where: { $0.url == url }) == false {
-                actions.append(UIAction(title: "Add to bookmarks", image: UIImage(systemName: "bookmark")) { _ in
+                actions.append(UIAction(title: "Add to bookmarks", image: Icon.bookmarkAdd.image(22)) { _ in
                     BrowserStore.shared.toggleBookmark(title: nil, url: url, iconURL: nil)
                 })
             }

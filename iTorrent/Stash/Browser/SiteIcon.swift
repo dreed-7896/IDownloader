@@ -70,34 +70,37 @@ final class SiteIconCache {
     }
 }
 
-/// A square site thumbnail; shows the site's initial until its icon loads.
+/// A rounded site tile; shows the site's initial until its icon loads.
+/// Large icons (apple-touch-icons) fill the tile; small favicons sit on white.
 struct SiteIcon: View {
     let title: String
     let url: URL
     var iconURL: URL?
     var size: CGFloat = 56
+    var cornerRadius: CGFloat?
 
     @State private var image: UIImage?
 
     var body: some View {
+        let radius = cornerRadius ?? size * 0.24
         ZStack {
             if let image {
-                Color.white
-                Image(uiImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .padding(image.size.width * image.scale >= 120 ? 0 : size * 0.18)
+                if image.size.width * image.scale >= 96 {
+                    Image(uiImage: image).resizable().interpolation(.high).scaledToFill()
+                } else {
+                    Color.white
+                    Image(uiImage: image).resizable().interpolation(.high).scaledToFit().padding(size * 0.2)
+                }
             } else {
-                Color.sS2
+                LinearGradient(colors: [Color.sS3, Color.sS2], startPoint: .top, endPoint: .bottom)
                 Text(initial)
                     .font(.sDisplay(size * 0.42, .heavy))
-                    .foregroundStyle(Color.sMint)
+                    .foregroundStyle(Color.sText2)
             }
         }
         .frame(width: size, height: size)
-        .clipped()
-        .overlay(Rectangle().strokeBorder(Color.sLine2, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
         .task(id: url) {
             if image == nil { image = SiteIconCache.shared.cached(for: url) }
             if image == nil { image = await SiteIconCache.shared.image(for: url, iconURL: iconURL) }
@@ -166,6 +169,7 @@ struct PageThumbnail: View {
     let url: URL
     var iconURL: URL?
     var aspectRatio: CGFloat = 0.78
+    var cornerRadius: CGFloat = 14
 
     @State private var image: UIImage?
 
@@ -182,8 +186,8 @@ struct PageThumbnail: View {
                     }
                 }
             }
-            .clipped()
-            .overlay(Rectangle().strokeBorder(Color.sLine2, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
             .onAppear { image = PageSnapshotStore.shared.image(for: url) }
             .onReceive(NotificationCenter.default.publisher(for: PageSnapshotStore.updated)) { note in
                 if note.object as? String == PageSnapshotStore.shared.key(url) { image = PageSnapshotStore.shared.image(for: url) }
